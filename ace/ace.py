@@ -1087,7 +1087,6 @@ def doPermutation(perm):
         combination.append(parameterList[permutations[count-1][length]])
 
     count_param = 0
-
     # **PHASE 2** : Exhaustively populate parameters to the chosen skeleton in phase 1
     for currentParameterOption in itertools.product(*combination):
         
@@ -1117,7 +1116,6 @@ def doPermutation(perm):
         log = '\t' + `count_param` + ' : ' + log + '\n'
         count_param += 1
         log_file_handle.write(log)
-        
         #Let's insert fsync combinations here.
         count_sync = 0
         usedFiles = list()
