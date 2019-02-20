@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#To run : python ace.py -l <seq_length> -n <nested : True|False> -d <demo : True|False>
+#To run : python ace_random.py -l <seq_length> -n <amount>
 import os
 import re
 import sys
@@ -1063,10 +1063,7 @@ def generateSequence(length):
       if skip_sync:
         op.append(perm[length])
         op.append(currentParameterOption[length])
-        if length == len(perm)-1:
-          op.append('1')
-        else:
-          op.append('0')
+        op.append('1')
         op = tuple(flatList(op))
 
       else:
@@ -1077,10 +1074,7 @@ def generateSequence(length):
       if not skip_sync:
         sync_op = list()
         sync_op.append(syncPermutationsCustom[random.randint(0,len(syncPermutationsCustom)) - 1])
-        if length == len(perm)-1:
-          sync_op.append('1')
-        else:
-          sync_op.append('0')
+        sync_op.append('1')
         seq.append(tuple(flatList(sync_op)))
     
     return seq
@@ -1120,6 +1114,60 @@ class SlowBar(FillingCirclesBar):
     def global_count(self):
         return global_count
 
+
+def getParam(t):
+  l = list()  
+  for index in range (1, len(t)):
+      if(t[index] != '1'):
+        l.append(t[index])
+  if(len(l) == 1):
+    return l[0]      
+  return tuple(l)     
+        
+
+def getSequenceNum(seq):
+  seq_num = list()
+  for t in seq:
+    op = t[0]
+    if op in OperationSet:
+      param = getParam(t)
+      op_num = OperationSet.index(op)
+      param_num = parameterList[op].index(param)
+      xor = op_num ^ param_num
+      seq_num.append(xor)
+  return seq_num   
+
+def djb2(seq_num):
+  hash_val = 5381
+  for i in seq_num:
+    hash_val = ((hash_val << 5) + hash_val) + i; # hash_val * 33 + i 
+  return hash_val
+
+def sdbm(seq_num):
+  hash_val = 0
+  for i in seq_num:
+    hash_val = i + (hash_val << 6) + (hash_val << 16) - hash_val;
+  return hash_val
+
+
+bloomFilter = []
+bloomFilter_size = 4096
+
+
+def createBloomFilter():
+  global bloomFilter
+  bloomFilter = [False] * bloomFilter_size
+
+def installBloomEntry(seq):
+  seq_num = getSequenceNum(seq)
+  djb2_val = djb2(seq_num) % bloomFilter_size
+  sbdm_val = sdbm(seq_num) % bloomFilter_size
+  if(bloomFilter[djb2_val] and bloomFilter[sbdm_val]):
+    return False
+  bloomFilter[djb2_val] = True
+  bloomFilter[sbdm_val] = True
+  return True
+
 global_count = 0
 parameterList = {}
 SyncSet = list()
@@ -1150,7 +1198,8 @@ def main():
     global SecondDirOptions
     global OperationSet
     global FallocOptions
-    
+    global bloomFilter
+    createBloomFilter()
     for i in OperationSet:
         parameterList[i] = buildTuple(i)
    
@@ -1165,9 +1214,12 @@ def main():
     
     for j in xrange(0, int(parsed_args.amount)):
       seq = generateSequence(int(num_ops))
+      while(not installBloomEntry(seq)):
+        seq = generateSequence(int(num_ops))
       modified_seq = generateModifiedSequence(seq)
+      #print(bloomFilter)
       print (seq) 
-      print (modified_seq)
+      #print (modified_seq)
 
 if __name__ == '__main__':
 	main()
