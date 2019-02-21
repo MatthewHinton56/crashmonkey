@@ -1010,37 +1010,29 @@ def getSyncOptions(file_list):
     sync = ('sync')
     none = ('none')
     SyncSet = list()
+    SyncSet.append(none)
     for i in xrange(0, len(d)):
         tup = list(fsync)
         tup.append(d[i])
         SyncSet.append(tuple(tup))
     SyncSet.append(sync)
     return SyncSet    
-
-
-def generateSequence(length):
-  
-    global global_count
-    global parameterList
-    global num_ops
-    global nested
-    global demo
-    global syncPermutations
-    global count
-    global permutations
-    global SyncSet
-    global log_file_handle
-    global count_param
-    seq = list()
+    
+def generatePerm(length):
     perm = list()
     #randomly select the operations to test
     for i in range(0, length):
       perm.append(random.choice(OperationSet))
+    return perm  
+    
+def generateParams(perm):
     currentParameterOption = list() 
-    #randomly select the operation for each operation  
     for op in perm:  
       currentParameterOption.append(random.choice(parameterList[op]))
-    #Generate sync options
+    return currentParameterOption
+  
+def generateSyncOptions(currentParameterOption):  
+    sync = list()
     count_sync = 0
     usedFiles = list()
     flat_used_list = flatList(currentParameterOption)
@@ -1049,7 +1041,21 @@ def generateSequence(length):
         usedFilesList = list(set(flat_used_list) & set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))
         usedFiles.append(tuple(usedFilesList))
     usedFiles = flatList(set(usedFiles))
-    syncPermutationsCustom = getSyncOptions(file_range(usedFiles))
+    return getSyncOptions(file_range(usedFiles))
+    
+def generateSync(syncPermutationsCustom, perm):
+    sync = list()
+    for index in range(0, len(perm)):
+      if perm[index] == 'fdatasync' or perm[index] == 'mmapwrite':
+        sync.append('')
+      else:
+        lowerbound = 1 if (index == len(perm) - 1) else 0
+        sync.append(syncPermutationsCustom[random.randint(lowerbound, len(syncPermutationsCustom)) - 1])
+    return sync
+    
+  
+def generateSeq(perm, currentParameterOption, sync):
+    seq = list()
     #merge the lists here . Just check if perm has fdatasync. If so skip adding any sync:
     for length in xrange(0, len(perm)):
       skip_sync = False
@@ -1063,7 +1069,10 @@ def generateSequence(length):
       if skip_sync:
         op.append(perm[length])
         op.append(currentParameterOption[length])
-        op.append('1')
+        if length == len(perm)-1:
+          op.append('1')
+        else:
+          op.append('0')
         op = tuple(flatList(op))
 
       else:
@@ -1073,12 +1082,16 @@ def generateSequence(length):
 
       if not skip_sync:
         sync_op = list()
-        sync_op.append(syncPermutationsCustom[random.randint(0,len(syncPermutationsCustom)) - 1])
-        sync_op.append('1')
+        sync_op.append(sync[length])
+        if length == len(perm)-1:
+          sync_op.append('1')
+        else:
+          sync_op.append('0')
         seq.append(tuple(flatList(sync_op)))
     
-    return seq
-
+    return seq    
+    
+    
 def generateModifiedSequence(seq):
     # **PHASE 4** : Deterministic stage - satisfy dependencies for all ops in the list so far.
     modified_pos = 0
@@ -1113,35 +1126,30 @@ class SlowBar(FillingCirclesBar):
     @property
     def global_count(self):
         return global_count
-
-
-def getParam(t):
-  l = list()  
-  for index in range (1, len(t)):
-      if(t[index] != '1'):
-        l.append(t[index])
-  if(len(l) == 1):
-    return l[0]      
-  return tuple(l)     
         
-
-def getSequenceNum(seq):
+def getSequenceNum(perm, paramlist, syncList, syncOptions):
   seq_num = list()
-  for t in seq:
-    op = t[0]
-    if op in OperationSet:
-      param = getParam(t)
-      op_num = OperationSet.index(op)
-      param_num = parameterList[op].index(param)
-      xor = op_num ^ param_num
-      seq_num.append(xor)
+  for index in range(0, len(perm)):
+    op = perm[index]
+    param = paramlist[index]
+    sync = syncList[index]
+    op_num = OperationSet.index(op)
+    param_num = parameterList[op].index(param)
+    val = ( str(op_num) + str(param_num))
+    val += '' if sync == '' else str(syncOptions.index(sync))
+    seq_num.append(int(val))
   return seq_num   
+
+
+
 
 def djb2(seq_num):
   hash_val = 5381
   for i in seq_num:
     hash_val = ((hash_val << 5) + hash_val) + i; # hash_val * 33 + i 
   return hash_val
+
+
 
 def sdbm(seq_num):
   hash_val = 0
@@ -1150,24 +1158,39 @@ def sdbm(seq_num):
   return hash_val
 
 
-bloomFilter = []
-bloomFilter_size = 4096
 
+
+
+bloomFilter = []
+bloomFilter_size = 16384
+hits = 0
+filledSpaces = 0
 
 def createBloomFilter():
   global bloomFilter
   bloomFilter = [False] * bloomFilter_size
 
-def installBloomEntry(seq):
-  seq_num = getSequenceNum(seq)
+def installBloomEntry(perm, param, syncList, syncOptions):
+  global hits
+  global filledSpaces
+  seq_num = getSequenceNum(perm, param, syncList, syncOptions)
   djb2_val = djb2(seq_num) % bloomFilter_size
   sbdm_val = sdbm(seq_num) % bloomFilter_size
   if(bloomFilter[djb2_val] and bloomFilter[sbdm_val]):
+    hits += 1
     return False
+  if(not bloomFilter[djb2_val]):
+    filledSpaces +=1
   bloomFilter[djb2_val] = True
+  if(not bloomFilter[sbdm_val]):
+    filledSpaces +=1
   bloomFilter[sbdm_val] = True
   return True
 
+def bloomFull():
+  for b in bloomFilter:
+    if (not b):
+      return False
 global_count = 0
 parameterList = {}
 SyncSet = list()
@@ -1209,16 +1232,31 @@ def main():
     #Print the test setup - just for sanity
     print_setup(parsed_args)
 
-    num_ops = parsed_args.sequence_len
-    
-    
+    upper_bound = int(parsed_args.sequence_len)
     for j in xrange(0, int(parsed_args.amount)):
-      seq = generateSequence(int(num_ops))
-      while(not installBloomEntry(seq)):
-        seq = generateSequence(int(num_ops))
+      num_ops = random.randint(1, upper_bound)
+      perm = generatePerm(int(num_ops))
+      param = generateParams(perm)
+      syncOptions = generateSyncOptions(param)
+      syncList = generateSync(syncOptions, perm)
+      while(not installBloomEntry(perm, param, syncList, syncOptions)):
+        perm = generatePerm(int(num_ops))
+        param = generateParams(perm)
+        syncOptions = generateSyncOptions(param)
+        syncList = generateSync(syncOptions, perm)
+        if bloomFull():
+          break
+      seq = generateSeq(perm, param,syncList)    
+      
       modified_seq = generateModifiedSequence(seq)
+      if bloomFull():
+        break
       #print(bloomFilter)
-      print (seq) 
+    #print ("done") 
+    #print ("hits:" + str(hits))
+    if (bloomFull()):
+      print("Full")
+    #print(bloomFilter_size - filledSpaces)  
       #print (modified_seq)
 
 if __name__ == '__main__':
