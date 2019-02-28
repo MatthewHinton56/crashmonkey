@@ -62,90 +62,8 @@ namespace fs_testing {
 				ACbar_path =  mnt_dir_ + "/A/C/bar";
 				int local_checkpoint = 0 ;
 
-				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
-					return errno;
-				}
-
-
-				if ( WriteData ( fd_foo, 0, 32768) < 0){ 
-					cm_->CmClose( fd_foo); 
-					return errno;
-				}
-
-
-				cm_->CmClose(fd_foo); 
-				fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_DIRECT|O_SYNC , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
-					return errno;
-				}
-
-				void* data_foo;
-				if (posix_memalign(&data_foo , 4096, 8192 ) < 0) {
-					return errno;
-				}
-
-				 
-				int offset_foo = 0;
-				int to_write_foo = 8192 ;
-				const char *text_foo  = "ddddddddddklmnopqrstuvwxyz123456";
-				while (offset_foo < 8192){
-					if (to_write_foo < 32){
-						memcpy((char *)data_foo+ offset_foo, text_foo, to_write_foo);
-						offset_foo += to_write_foo;
-					}
-					else {
-						memcpy((char *)data_foo+ offset_foo,text_foo, 32);
-						offset_foo += 32; 
-					} 
-				} 
-
-				if ( pwrite ( fd_foo, data_foo, 8192, 0) < 0){
-					cm_->CmClose( fd_foo); 
-					return errno;
-				}
-				cm_->CmClose(fd_foo);
-
-				cm_->CmSync(); 
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
-				}
-
-
 				if ( mkdir(A_path.c_str() , 0777) < 0){ 
 					return errno;
-				}
-
-
-				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_bar < 0 ) { 
-					cm_->CmClose( fd_bar); 
-					return errno;
-				}
-
-
-				if ( link(bar_path.c_str() , Abar_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				cm_->CmSync(); 
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
 				}
 
 
@@ -156,15 +74,38 @@ namespace fs_testing {
 				}
 
 
-				if ( unlink(Abar_path.c_str() ) < 0){ 
+				cm_->CmClose(fd_Afoo); 
+				fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_DIRECT|O_SYNC , 0777); 
+				if ( fd_Afoo < 0 ) { 
+					cm_->CmClose( fd_Afoo); 
 					return errno;
 				}
 
-
-				if ( link(Afoo_path.c_str() , Abar_path.c_str() ) < 0){ 
+				void* data_Afoo;
+				if (posix_memalign(&data_Afoo , 4096, 32768 ) < 0) {
 					return errno;
 				}
 
+				 
+				int offset_Afoo = 0;
+				int to_write_Afoo = 32768 ;
+				const char *text_Afoo  = "ddddddddddklmnopqrstuvwxyz123456";
+				while (offset_Afoo < 32768){
+					if (to_write_Afoo < 32){
+						memcpy((char *)data_Afoo+ offset_Afoo, text_Afoo, to_write_Afoo);
+						offset_Afoo += to_write_Afoo;
+					}
+					else {
+						memcpy((char *)data_Afoo+ offset_Afoo,text_Afoo, 32);
+						offset_Afoo += 32; 
+					} 
+				} 
+
+				if ( pwrite ( fd_Afoo, data_Afoo, 32768, 0) < 0){
+					cm_->CmClose( fd_Afoo); 
+					return errno;
+				}
+				cm_->CmClose(fd_Afoo);
 
 				int fd_A = cm_->CmOpen(A_path.c_str() , O_DIRECTORY , 0777); 
 				if ( fd_A < 0 ) { 
@@ -176,150 +117,6 @@ namespace fs_testing {
 				if ( cm_->CmFsync( fd_A) < 0){ 
 					return errno;
 				}
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
-				}
-
-
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
-					return errno;
-				}
-
-
-				if ( remove(Afoo_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
-				if ( fd_test < 0 ) { 
-					cm_->CmClose( fd_test); 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_test) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
-				}
-
-
-				 fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_foo < 0 ) { 
-					cm_->CmClose( fd_foo); 
-					return errno;
-				}
-
-
-				if ( cm_->CmClose ( fd_foo) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmRename (foo_path.c_str() , Abar_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				 fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
-					return errno;
-				}
-
-
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmClose ( fd_bar) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmRename (Afoo_path.c_str() , bar_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				 fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_bar < 0 ) { 
-					cm_->CmClose( fd_bar); 
-					return errno;
-				}
-
-
-				if ( cm_->CmFsync( fd_bar) < 0){ 
-					return errno;
-				}
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
-				}
-
-
-				 fd_Afoo = cm_->CmOpen(Afoo_path.c_str() , O_RDWR|O_CREAT , 0777); 
-				if ( fd_Afoo < 0 ) { 
-					cm_->CmClose( fd_Afoo); 
-					return errno;
-				}
-
-
-				if ( WriteData ( fd_Afoo, 0, 32768) < 0){ 
-					cm_->CmClose( fd_Afoo); 
-					return errno;
-				}
-
-
-				if ( WriteData ( fd_Afoo, 0, 5000) < 0){ 
-					cm_->CmClose( fd_Afoo); 
-					return errno;
-				}
-
-
-				cm_->CmSync(); 
-
-
-				if ( cm_->CmCheckpoint() < 0){ 
-					return -1;
-				}
-				local_checkpoint += 1; 
-				if (local_checkpoint == checkpoint) { 
-					return 0;
-				}
-
-
-				if ( cm_->CmClose ( fd_Afoo) < 0){ 
-					return errno;
-				}
-
-
-				if ( unlink(Afoo_path.c_str() ) < 0){ 
-					return errno;
-				}
-
-
-				cm_->CmSync(); 
 
 
 				if ( cm_->CmCheckpoint() < 0){ 
@@ -357,17 +154,137 @@ namespace fs_testing {
 				}
 
 
+				if ( fallocate( fd_Afoo , FALLOC_FL_KEEP_SIZE , 32768 , 32768) < 0){ 
+					cm_->CmClose( fd_Afoo);
+					 return errno;
+				}
+
+
+				int fd_Abar = cm_->CmOpen(Abar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_Abar < 0 ) { 
+					cm_->CmClose( fd_Abar); 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_Abar) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmCheckpoint() < 0){ 
+					return -1;
+				}
+				local_checkpoint += 1; 
+				if (local_checkpoint == checkpoint) { 
+					return 0;
+				}
+
+
+				if ( fallocate( fd_Afoo , FALLOC_FL_KEEP_SIZE , 63536 , 5000) < 0){ 
+					cm_->CmClose( fd_Afoo);
+					 return errno;
+				}
+
+
+				int fd_bar = cm_->CmOpen(bar_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_bar < 0 ) { 
+					cm_->CmClose( fd_bar); 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_bar) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmCheckpoint() < 0){ 
+					return -1;
+				}
+				local_checkpoint += 1; 
+				if (local_checkpoint == checkpoint) { 
+					return 0;
+				}
+
+
+				int fd_foo = cm_->CmOpen(foo_path.c_str() , O_RDWR|O_CREAT , 0777); 
+				if ( fd_foo < 0 ) { 
+					cm_->CmClose( fd_foo); 
+					return errno;
+				}
+
+
+				if ( WriteData ( fd_foo, 0, 32768) < 0){ 
+					cm_->CmClose( fd_foo); 
+					return errno;
+				}
+
+
+				if ( truncate (foo_path.c_str(), 2500) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_Afoo) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmCheckpoint() < 0){ 
+					return -1;
+				}
+				local_checkpoint += 1; 
+				if (local_checkpoint == checkpoint) { 
+					return 0;
+				}
+
+
 				if ( cm_->CmClose ( fd_Afoo) < 0){ 
 					return errno;
 				}
 
 
-				if ( unlink(Afoo_path.c_str() ) < 0){ 
+				if ( remove(Afoo_path.c_str() ) < 0){ 
 					return errno;
 				}
 
 
-				if ( cm_->CmFsync( fd_A) < 0){ 
+				cm_->CmSync(); 
+
+
+				if ( cm_->CmCheckpoint() < 0){ 
+					return -1;
+				}
+				local_checkpoint += 1; 
+				if (local_checkpoint == checkpoint) { 
+					return 0;
+				}
+
+
+				if ( cm_->CmClose ( fd_bar) < 0){ 
+					return errno;
+				}
+
+
+				if ( unlink(bar_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
+				if ( link(foo_path.c_str() , bar_path.c_str() ) < 0){ 
+					return errno;
+				}
+
+
+				int fd_test = cm_->CmOpen(test_path.c_str() , O_DIRECTORY , 0777); 
+				if ( fd_test < 0 ) { 
+					cm_->CmClose( fd_test); 
+					return errno;
+				}
+
+
+				if ( cm_->CmFsync( fd_test) < 0){ 
 					return errno;
 				}
 
@@ -381,7 +298,12 @@ namespace fs_testing {
 				}
 
 
-				if ( cm_->CmClose ( fd_bar) < 0){ 
+				if ( cm_->CmClose ( fd_foo) < 0){ 
+					return errno;
+				}
+
+
+				if ( cm_->CmClose ( fd_Abar) < 0){ 
 					return errno;
 				}
 
