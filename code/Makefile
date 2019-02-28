@@ -105,6 +105,16 @@ CM_PERMUTERS = \
 			$(filter-out $(CM_PERMUTER_EXCLUDE), \
 				$(notdir $(wildcard $(CURDIR)/permuter/*.cpp))))
 
+CM_FUZZER_EXCLUDE = base.cpp
+CM_FUZZER = \
+		$(patsubst %.cpp, %.so, \
+			$(filter-out $(CM_FUZZER_EXCLUDE), \
+					$(notdir $(wildcard $(CURDIR)/tests/fuzzer/*.cpp))))
+                   
+CM_FUZZER_OUT = \
+		$(foreach TEST, $(CM_FUZZER), \
+			$(BUILD_DIR)/tests/fuzzer/$(TEST))        
+
 .PHONY: all modules c_harness user_tool $(CM_TESTS) $(CM_PERMUTERS) clean
 
 ################################################################################
@@ -117,7 +127,8 @@ all: \
 		user_tools \
 		tests \
 		seq1 \
-		permuters
+		permuters \
+    fuzzer \
 
 modules: \
 		$(foreach MOD, $(MODULES), $(addsuffix .c, $(MOD))) \
@@ -142,6 +153,9 @@ seq1: \
 
 gentests: \
 		$(CM_GEN_OUT)
+   
+fuzzer: \
+    $(CM_FUZZER_OUT)
 
 permuters: \
 		$(foreach PERMUTER, $(CM_PERMUTERS), $(BUILD_DIR)/permuter/$(PERMUTER))
@@ -237,6 +251,21 @@ $(CM_SEQ1_OUT): $(BUILD_DIR)/tests/seq1/%.so : \
 
 $(CM_GEN_OUT): $(BUILD_DIR)/tests/generated_workloads/%.so : \
 		tests/generated_workloads/%.cpp \
+		$(BUILD_DIR)/tests/BaseTestCase.o \
+		$(BUILD_DIR)/user_tools/src/actions.o \
+		$(BUILD_DIR)/user_tools/src/wrapper.o \
+		$(BUILD_DIR)/user_tools/src/workload.o \
+		$(BUILD_DIR)/utils/DiskMod.o \
+		$(BUILD_DIR)/utils/communication/BaseSocket.o \
+		$(BUILD_DIR)/utils/communication/ClientSocket.o \
+		$(BUILD_DIR)/utils/communication/ClientCommandSender.o \
+		$(BUILD_DIR)/results/DataTestResult.o
+	mkdir -p $(@D)
+	$(GPP) $(GOPTS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
+		-o $@ $^
+
+$(CM_FUZZER_OUT): $(BUILD_DIR)/tests/fuzzer/%.so : \
+		tests/fuzzer/%.cpp \
 		$(BUILD_DIR)/tests/BaseTestCase.o \
 		$(BUILD_DIR)/user_tools/src/actions.o \
 		$(BUILD_DIR)/user_tools/src/wrapper.o \

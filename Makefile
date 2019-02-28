@@ -19,6 +19,9 @@ gentests:
 permuters:
 	$(MAKE) -C $(CODEDIR) permuters
 
+fuzzer: 
+	$(MAKE) -C $(CODEDIR) fuzzer
+
 $(SUBDIRS):
 	$(MAKE) -C $@ all
 
