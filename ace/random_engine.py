@@ -227,6 +227,7 @@ def build_parser():
     # global args
     parser.add_argument('--sequence_len', '-l', default='3', help='Number of critical ops in the bugy workload')
     parser.add_argument('--amount', '-n', default='10', help='Number of Workloads to generate?')
+    parser.add_argument('--jlang', '-j', default='False', help='If the jlang file is to be generated')
 
     return parser
 
@@ -1343,7 +1344,7 @@ def main():
     parsed_args = build_parser().parse_args()
     setup()
     for i in range(int(parsed_args.amount)):
-      val = produceWorkload(int(parsed_args.sequence_len), False, False)
+      val = produceWorkload(int(parsed_args.sequence_len), False, bool(parsed_args.jlang))
       if val == '':
         break;
     print (false_negative)  
