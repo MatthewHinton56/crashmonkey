@@ -63,6 +63,113 @@ OperationSet = ['creat', 'mkdir', 'falloc', 'write', 'dwrite','mmapwrite', 'link
 expected_sequence = []
 expected_sync_sequence = []
 
+expected_sequence.append([('link', ('foo', 'bar')), ('unlink', ('bar')), ('creat', ('bar'))])
+expected_sync_sequence.append([('sync'), ('none'), ('fsync', 'bar')])
+
+
+# 2. btrfs_rename_special_file 3 (yes in 3)
+expected_sequence.append([('mknod', ('foo')), ('rename', ('foo', 'bar')), ('link', ('bar', 'foo'))])
+expected_sync_sequence.append([('fsync', 'bar'), ('none'), ('fsync', 'bar')])
+
+# 3. new_bug1_btrfs 2 (Yes finds in 2)
+expected_sequence.append([('write', ('foo', 'append')), ('falloc', ('foo', 'FALLOC_FL_ZERO_RANGE|FALLOC_FL_KEEP_SIZE', 'append'))])
+expected_sync_sequence.append([('fsync', 'foo'), ('fsync', 'foo')])
+
+# 4. new_bug2_f2fs 3 (Yes finds in 2)
+expected_sequence.append([('write', ('foo', 'append')), ('falloc', ('foo', 'FALLOC_FL_ZERO_RANGE|FALLOC_FL_KEEP_SIZE', 'append')), ('fdatasync', ('foo'))])
+expected_sync_sequence.append([('sync'), ('none'), ('none')])
+
+#We miss this in seq-2, because we disallow workloads of sort creat, creat
+# 5. generic_034 2
+expected_sequence.append([('creat', ('A/foo')), ('creat', ('A/bar'))])
+expected_sync_sequence.append([('sync'), ('fsync', 'A')])
+
+# 6. generic_039 2 (Yes finds in 2)
+expected_sequence.append([('link', ('foo', 'bar')), ('remove', ('bar'))])
+expected_sync_sequence.append([('sync'), ('fsync', 'foo')])
+
+# 7. generic_059 2 (yes finds in 2)
+expected_sequence.append([('write', ('foo', 'append')), ('falloc', ('foo', 'FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE', 'overlap_unaligned'))])
+expected_sync_sequence.append([('sync'), ('fsync', 'foo')])
+
+# 8. generic_066 2 (Yes finds in 2)
+expected_sequence.append([('fsetxattr', ('foo')), ('removexattr', ('foo'))])
+expected_sync_sequence.append([('sync'), ('fsync', 'foo')])
+
+#Reachable from current seq 2 generator  (#1360 : creat A/foo, rename A,B) (sync, fsync A)
+#We will miss this, if we restrict that op2 reuses files from op1
+# 9. generic_341 3 (Yes finds in 2)
+expected_sequence.append([('creat', ('A/foo')), ('rename', ('A', 'B')), ('mkdir', ('A'))])
+expected_sync_sequence.append([('sync'), ('none'), ('fsync', 'A')])
+
+# 10. generic_348 1 (yes finds in 1)
+expected_sequence.append([('symlink', ('foo', 'A/bar'))])
+expected_sync_sequence.append([('fsync', 'A')])
+
+# 11. generic_376 2 (yes finds in 2)
+expected_sequence.append([('rename', ('foo', 'bar')), ('creat', ('foo'))])
+expected_sync_sequence.append([('none'), ('fsync', 'bar')])
+
+#Yes reachable from sseeq2 - (falloc (foo, append), fdatasync foo)
+# 12. generic_468 3 (yes, finds in 2)
+expected_sequence.append([('write', ('foo', 'append')), ('falloc', ('foo', 'FALLOC_FL_KEEP_SIZE', 'append')), ('fdatasync', ('foo'))])
+expected_sync_sequence.append([('sync'), ('none'), ('none')])
+
+#We miss this if we sync only used file set - or we need an option 'none' to end the file with
+# 13. ext4_direct_write 2
+expected_sequence.append([('write', ('foo', 'append')), ('dwrite', ('foo', 'overlap'))])
+expected_sync_sequence.append([('none'), ('fsync', 'bar')])
+
+#14 btrfs_EEXIST (Seq 1)
+#creat foo, fsync foo
+#write foo 0-4K, fsync foo
+
+#btrfs use -O extref during mkfs
+#15. generic 041 (If we consider the 3000 as setup, then seq length 3)
+#create 3000 link(foo, foo_i), sync, unlink(foo_0), link(foo, foo_3001), link(foo, foo_0), fsync foo
+
+#16. generic 056 (seq2)
+#write(foo, 0-4K), fsync foo, link(foo, bar), fsync some random file/dir
+
+#requires that we allow repeated operations (check if mmap write works here)
+#17 generic 090 (seq3)
+#write(foo 0-4K), sync, link(foo, bar), sync, append(foo, 4K-8K), fsync foo
+
+#18 generic_104 (seq2) larger file set
+#link(foo, foo1), link(bar, bar1), fsync(bar)
+
+#19 generic 106 (seq 2)
+#link(foo, bar), sync, unlink(bar) *drop cache* fsync foo
+
+#20 generic 107 (seq 3)
+#link(foo, A/foo), link(foo, A/bar), sync, unlink(A/bar), fsync(foo)
+
+#21 generic 177
+#write(foo, 0-32K), sync, punch_hole(foo, 24K-32K), punch_hole(foo, 4K-64K) fsync foo
+
+#22 generic 321 2 fsyncs?
+#rename(foo, A/foo), fsync A, fsync A/foo
+
+#23 generic 322 (yes, seq1)
+#rename(A/foo, A/bar), fsync(A/bar)
+
+#24 generic 335 (seq 2) but larger file set
+#rename(A/foo, foo), creat bar, fsync(test)
+
+#25 generic 336 (seq 4)
+#link(A/foo, B/foo), creat B/bar, sync, unlink(B/foo), mv(B/bar, C/bar), fsync A/foo
+
+
+#26 generic 342 (seq 3)
+# write foo 0-4K, sync, rename(foo,bar), write(foo) fsync(foo)
+
+#27 generic 343 (seq 2)
+#link(A/foo, A/bar) , rename(B/foo_new, A/foo_new), fsync(A/foo)
+
+#28 generic 325 (seq3)
+#write,(foo, 0-256K), mmapwrite(0-4K), mmapwrite(252-256K), msync(0-64K), msync(192-256K)
+
+
 
 #return sibling of a file/directory
 def SiblingOf(file):
@@ -1182,23 +1289,42 @@ def generateJLang(modified_sequence):
     subprocess.call(mv_command, shell=True)
     return j_lang_file
 
-def produceWorkload(upper_bound):
+
+#embeds known bug sequence into workload
+def imbed_sequence(perm, param, syncList, syncOptions):
+    bug_work_load_index = random.randint(0, len(expected_sequence))
+    bug_sequence = expected_sequence[bug_work_load_index]
+    bug_sync = expected_sync_sequence[bug_work_load_index]
+    bug_length = len(bug_sequence)
+    insert_index = random.randint(1, len(perm) - bug_length)
+    for i in range(insert_index, insert_index + bug_length):
+        perm[i] = bug_sequence[i - insert_index][0]
+        param[i] = bug_sequence[i - insert_index][1]
+        syncList[i] = bug_sync[i - insert_index]
+        syncOptions.append(bug_sync[i - insert_index])
+      
+
+def produceWorkload(upper_bound, imbed, jlang_f):
     global global_count
     num_ops = random.randint(4, upper_bound)
     perm = generatePerm(int(num_ops))
     param = generateParams(perm)
     syncOptions = generateSyncOptions(param)
     syncList = generateSync(syncOptions, perm)
+    if(imbed):
+        imbed_sequence(perm, param, syncList, syncOptions)
     while(not installBloomEntry(perm, param, syncList, syncOptions)):
       num_ops = random.randint(4, upper_bound)
       perm = generatePerm(int(num_ops))
       param = generateParams(perm)
       syncOptions = generateSyncOptions(param)
       syncList = generateSync(syncOptions, perm)
+      if(imbed):
+        imbed_sequence(perm, param, syncList, syncOptions)
       if bloomFull():
         break
     seq = generateSeq(perm, param,syncList)    
-      
+    print(seq)  
     modified_seq = generateModifiedSequence(seq)
       #print(bloomFilter)
     #print ("done") 
@@ -1207,8 +1333,9 @@ def produceWorkload(upper_bound):
       return ''
     #print(bloomFilter_size - filledSpaces)  
     #print (modified_seq)
-    jlang = ''
-    jlang = generateJLang(modified_seq)
+    jlang = ' '
+    if(jlang_f):
+      jlang = generateJLang(modified_seq)
     global_count += 1
     return jlang
 
@@ -1216,7 +1343,7 @@ def main():
     parsed_args = build_parser().parse_args()
     setup()
     for i in range(int(parsed_args.amount)):
-      val = produceWorkload(int(parsed_args.sequence_len))
+      val = produceWorkload(int(parsed_args.sequence_len), False, False)
       if val == '':
         break;
     print (false_negative)  

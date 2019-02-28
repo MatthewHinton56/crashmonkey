@@ -105,7 +105,7 @@ def main():
 	upper_bound = int(parsed_args.length)
 	while (time.time() - start_time) < runtime:
 			os.chdir('ace')
-			filename = random_engine.produceWorkload(upper_bound) + '.so'
+			filename = random_engine.produceWorkload(upper_bound, False, True) + '.so'
 			os.chdir('..')
 			subprocess.call('make fuzzer -B', shell=True)
       
