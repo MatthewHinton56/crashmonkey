@@ -1269,7 +1269,10 @@ def setup():
     #print(param_num_max)
               
 
-def generateJLang(modified_sequence):
+def generateJLang(modified_sequence, trim):
+    local_dest_dir = dest_dir
+    if(trim):
+      local_dest_dir += "/trim"
     j_lang_file = 'j-langf' + str(global_count)
     source_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
     copyfile(source_j_lang_file, j_lang_file)
@@ -1304,9 +1307,10 @@ def imbed_sequence(perm, param, syncList, syncOptions):
         syncList[i] = bug_sync[i - insert_index]
         syncOptions.append(bug_sync[i - insert_index])
       
-
+most_recent_seq = []
 def produceWorkload(upper_bound, imbed, jlang_f):
     global global_count
+    global most_recent_seq
     num_ops = random.randint(4, upper_bound)
     perm = generatePerm(int(num_ops))
     param = generateParams(perm)
@@ -1325,6 +1329,7 @@ def produceWorkload(upper_bound, imbed, jlang_f):
       if bloomFull():
         break
     seq = generateSeq(perm, param,syncList)    
+    most_recent_seq = seq
     print(seq)  
     modified_seq = generateModifiedSequence(seq)
       #print(bloomFilter)
@@ -1336,9 +1341,21 @@ def produceWorkload(upper_bound, imbed, jlang_f):
     #print (modified_seq)
     jlang = ' '
     if(jlang_f):
-      jlang = generateJLang(modified_seq)
+      jlang = generateJLang(modified_seq, False)
     global_count += 1
     return jlang
+
+
+def getSeg():
+  return most_recent_seq
+
+#Produces worloads of lengths from 1 -> len(seq) - 1
+def trimWorkload(seq):
+  for index in range(0, len(seq) - 1):
+    seq_trim = seq[index:len(seq)]
+    modified_seq = generateModifiedSequence(seq_trim)
+    generateJLang(modified_seq, True)
+
 
 def main():
     parsed_args = build_parser().parse_args()
