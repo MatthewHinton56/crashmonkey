@@ -14,12 +14,9 @@ import pprint
 import collections
 import threading
 import random
-from progressbar import *
 from shutil import copyfile
 from string import maketrans
 from multiprocessing import Pool
-from progress.bar import *
-
 
 #All functions that has options go here
 
@@ -1018,26 +1015,14 @@ def generateParams(perm):
       currentParameterOption.append(random.choice(parameterList[op]))
     return currentParameterOption
   
-def generateSyncOptions(currentParameterOption):  
-    sync = list()
-    count_sync = 0
-    usedFiles = list()
-    flat_used_list = flatList(currentParameterOption)
-    for file_len in xrange(0, len(flat_used_list)):
-      if isinstance(flat_used_list[file_len], basestring):
-        usedFilesList = list(set(flat_used_list) & set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))
-        usedFiles.append(tuple(usedFilesList))
-    usedFiles = flatList(set(usedFiles))
-    return getSyncOptions(file_range(usedFiles))
-    
-def generateSync(syncPermutationsCustom, perm):
+def generateSync(perm):
     sync = list()
     for index in range(0, len(perm)):
       if perm[index] == 'fdatasync' or perm[index] == 'mmapwrite':
         sync.append('')
       else:
         lowerbound = 1 if (index == len(perm) - 1) else 0
-        sync.append(syncPermutationsCustom[random.randint(lowerbound, len(syncPermutationsCustom)) - 1])
+        sync.append(syncOptions[random.randint(lowerbound, len(syncOptions)) - 1])
     return sync
     
   
@@ -1107,20 +1092,14 @@ def generateModifiedSequence(seq):
         modified_sequence.insert(modified_pos, insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
         modified_pos += 1
     return modified_sequence
-    
-class SlowBar(FillingCirclesBar):
-    suffix = '%(percent).0f%%  (Completed %(index)d skeletons with %(global_count)d workloads)'
-    @property
-    def global_count(self):
-        return global_count
-        
+
 param_num_max = 0
 op_num_max = 0        
         
 def getSequenceNum(perm, paramlist, syncList, syncOptions):
   global param_num_max
   global op_num_max
-  seq_num = list()
+  seq_list = []
   syncOptions_max = 2
   #print("sync op max", syncOptions_max)
   for index in range(0, len(perm)):
@@ -1135,30 +1114,30 @@ def getSequenceNum(perm, paramlist, syncList, syncOptions):
     #print(param_num)
     #print(sync_num)
     val += sync_num
-    seq_num.append(int(val))
+    seq_list.append(val)
   #print (seq_num)  
-  return seq_num   
+  return ''.join(seq_list)   
 
 
 
 
-def djb2(seq_num):
+def djb2(seq_string):
   hash_val = 5381
-  for i in seq_num:
-    hash_val = ((hash_val << 5) + hash_val) + i; # hash_val * 33 + i 
+  for i in seq_string:
+    hash_val = ((hash_val << 5) + hash_val) + ord(i); # hash_val * 33 + i 
   return hash_val
 
 
 
-def sdbm(seq_num):
+def sdbm(seq_string):
   hash_val = 0
-  for i in seq_num:
-    hash_val = i + (hash_val << 6) + (hash_val << 16) - hash_val;
+  for i in seq_string:
+    hash_val = ord(i) + (hash_val << 6) + (hash_val << 16) - hash_val;
   return hash_val
 
 
 
-sequence_storage = []
+sequence_storage = set()
 
 bloomFilter = []
 bloomFilter_size = 163840
@@ -1167,52 +1146,74 @@ false_positive = 0
 false_negative = 0
 filledSpaces = 0
 
-def longCheck(seq_num):
-  if seq_num not in sequence_storage:
-    sequence_storage.append(seq_num)
+def longCheck(seq_string):
+  if seq_string not in sequence_storage:
+    sequence_storage.add(seq_string)
     return True
   return False
 
-def longAdd(seq_num):
-    sequence_storage.append(seq_num)
+def longAdd(seq_string):
+    sequence_storage.add(seq_string)
 
 def createBloomFilter():
   global bloomFilter
   bloomFilter = [False] * bloomFilter_size
 
-def installBloomEntry(perm, param, syncList, syncOptions):
+def longAndShort(perm, param, syncList, syncOptions):
   global hits
   global false_positive
   global false_negative
   global filledSpaces
-  seq_num = getSequenceNum(perm, param, syncList, syncOptions)
-  djb2_val = djb2(seq_num) % bloomFilter_size
-  sbdm_val = sdbm(seq_num) % bloomFilter_size
-  if(bloomFilter[djb2_val] and bloomFilter[sbdm_val]):
-    #hits += 1
-    result = longCheck(seq_num)
+  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
+  djb2_val = djb2(seq_string) % bloomFilter_size
+  sbdm_val = sdbm(seq_string) % bloomFilter_size
+  python_val = hash(seq_string) % bloomFilter_size
+  if(bloomFilter[djb2_val] and bloomFilter[sbdm_val] and bloomFilter[python_val]):
+    result = longCheck(seq_string)
     if(result):
       false_negative += 1
       return True
     return False
-  longAdd(seq_num) 
-  #if(not bloomFilter[djb2_val]):
-  #  filledSpaces +=1
+  longAdd(seq_string) 
   bloomFilter[djb2_val] = True
-  #if(not bloomFilter[sbdm_val]):
-  #  filledSpaces +=1
   bloomFilter[sbdm_val] = True
+  bloomFilter[python_val] = True
   return True
+
+def longOnly(perm, param, syncList, syncOptions):
+  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
+  return longCheck(seq_string)  
+
+def shortOnly(perm, param, syncList, syncOptions):
+  global hits
+  global false_positive
+  global false_negative
+  global filledSpaces
+  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
+  djb2_val = djb2(seq_string) % bloomFilter_size
+  sbdm_val = sdbm(seq_string) % bloomFilter_size
+  python_val = hash(seq_string) % bloomFilter_size
+  if(bloomFilter[djb2_val] and bloomFilter[sbdm_val] and bloomFilter[python_val]):
+    return False
+  bloomFilter[djb2_val] = True
+  bloomFilter[sbdm_val] = True
+  bloomFilter[python_val] = True
+  return True
+
+def clean():
+  bloomFiler = []
+  sequence_storage = set()
 
 def bloomFull():
   for b in bloomFilter:
     if (not b):
       return False
+
+
 global_count = 0
 parameterList = {}
 SyncSet = list()
 num_ops = 0
-nested = False
 demo = False
 syncPermutations = []
 count = 0
@@ -1220,15 +1221,14 @@ permutations = []
 log_file_handle = 0
 count_param = 0
 dest_dir = ""
+syncOptions = []
 
-
-def setup():
+def setup(nested):
     global global_count
     global parameterList
     global num_ops
     global syncPermutations
     global count
-    global nested
     global permutations
     global SyncSet
     global demo
@@ -1244,6 +1244,15 @@ def setup():
     global jlang_output
     global param_num_max
     global op_num_max
+    global syncOptions
+
+    if nested:
+      FileOptions = FileOptions + ['AC/foo']
+      SecondFileOptions = SecondFileOptions + ['AC/bar']
+      SecondDirOptions = SecondDirOptions + ['AC']
+    file_list = list(set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))    
+    syncOptions = getSyncOptions(file_range(file_list))    
+
     createBloomFilter()
     global_count = 0
     dest_dir = "fuzzer"
@@ -1286,33 +1295,11 @@ def generateJLang(modified_sequence):
     f.close()
     exec_command = 'python ../ace/cmAdapter.py -b ../code/tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../code/tests/' + dest_dir + '/ -o ' + str(global_count)
     subprocess.call(exec_command, shell=True)
-    mv_command = 'mv ' + j_lang_file + ' ../fuzzer/tests/'
+    target_path = ' ../code/tests/' + dest_dir + '/j-lang-files/'
+    mv_command = 'mv ' + j_lang_file + target_path
     subprocess.call(mv_command, shell=True)
+
     return j_lang_file
-
-def generateJLangTrim(modified_sequence, length):
-    local_dest_dir = "trim"
-    j_lang_file = 'j-langf' + str(length)
-    source_j_lang_file = '../code/tests/' + local_dest_dir + '/base-j-lang'
-    copyfile(source_j_lang_file, j_lang_file)
-    length_map = {}
-    with open(j_lang_file, 'a') as f:
-        run_line = '\n\n# run\n'
-        f.write(run_line)
-        
-        for insert in xrange(0, len(modified_sequence)):
-          cur_line = buildJlang(modified_sequence[insert], length_map)
-          cur_line_log = '{0}'.format(cur_line) + '\n'
-          f.write(cur_line_log)
-
-    f.close()
-    exec_command = 'python ../ace/cmAdapter.py -b ../code/tests/' + local_dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../code/tests/' + local_dest_dir + '/ -o ' + str(length)
-    subprocess.call(exec_command, shell=True)
-    mv_command = 'mv ' + j_lang_file + ' ../fuzzer/trim/tests/'
-    subprocess.call(mv_command, shell=True)
-    return j_lang_file
-
-
 
 #embeds known bug sequence into workload
 def imbed_sequence(perm, param, syncList, syncOptions):
@@ -1328,27 +1315,21 @@ def imbed_sequence(perm, param, syncList, syncOptions):
         syncOptions.append(bug_sync[i - insert_index])
       
 most_recent_seq = []
-def produceWorkload(upper_bound, imbed, jlang_f):
+def produceWorkload(upper_bound, jlang_f):
     global global_count
     global most_recent_seq
     num_ops = random.randint(4, upper_bound)
     perm = generatePerm(int(num_ops))
     param = generateParams(perm)
-    syncOptions = generateSyncOptions(param)
-    syncList = generateSync(syncOptions, perm)
-    if(imbed):
-        imbed_sequence(perm, param, syncList, syncOptions)
-    while(not installBloomEntry(perm, param, syncList, syncOptions)):
+    syncList = generateSync(perm)
+    while(not longOnly(perm, param, syncList, syncOptions)):
       num_ops = random.randint(4, upper_bound)
       perm = generatePerm(int(num_ops))
       param = generateParams(perm)
-      syncOptions = generateSyncOptions(param)
-      syncList = generateSync(syncOptions, perm)
-      if(imbed):
-        imbed_sequence(perm, param, syncList, syncOptions)
+      syncList = generateSync(perm)
       if bloomFull():
         break
-    seq = generateSeq(perm, param,syncList)    
+    seq = generateSeq(perm, param, syncList)    
     most_recent_seq = seq
     #print(seq)  
     modified_seq = generateModifiedSequence(seq)
@@ -1369,35 +1350,19 @@ def produceWorkload(upper_bound, imbed, jlang_f):
 def getSeq():
   return most_recent_seq
 
-#Produces worloads of lengths from 1 -> len(seq) - 1
-def trimWorkload(seq):
-    local_dest_dir = "trim"
-    target_path = '../code/tests/' + local_dest_dir + '/j-lang-files/'
-    if not os.path.exists(target_path):
-        os.makedirs(target_path)
-    dest_j_lang_file = '../code/tests/' + local_dest_dir + '/base-j-lang'
-    source_j_lang_file = '../code/tests/ace-base/base-j-lang'
-    copyfile(source_j_lang_file, dest_j_lang_file)
-    
-    dest_j_lang_cpp = '../code/tests/' + dest_dir + '/base.cpp'
-    source_j_lang_cpp = '../code/tests/ace-base/base.cpp'
-    copyfile(source_j_lang_cpp, dest_j_lang_cpp) 
-    if not os.path.exists(target_path):
-        os.makedirs(target_path)
-    for index in range(len(seq) - 1, 0 , -1):
-      seq_trim = seq[index:len(seq)]
-      print seq_trim
-      modified_seq = generateModifiedSequence(seq_trim)
-      length = len(seq) - 1 - index 
-      generateJLangTrim(modified_seq, length)
-
-
 def main():
+    start = time.time()
     parsed_args = build_parser().parse_args()
-    setup()
-    for index in range(0, 100000):
-      val = produceWorkload(int(parsed_args.sequence_len), False, False)
+    setup(True)
+    avg = 0.0
+    for index in range(0, int(parsed_args.amount)):
+      test_start = time.time()
+      val = produceWorkload(int(parsed_args.sequence_len), False)
+      avg += (time.time() - test_start)
+
     print false_negative  
+    print time.time() - start
+    print (avg / int(parsed_args.amount))
 
 if __name__ == '__main__':
 	main()

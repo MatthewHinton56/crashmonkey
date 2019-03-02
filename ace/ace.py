@@ -1322,7 +1322,7 @@ def main():
     # In case the user requests for an additional level of nesting, add one nested dir A/C and one file within it A/C/foo.
     if nested:
         FileOptions = FileOptions + ['AC/foo']
-	SecondFileOptions = SecondFileOptions + ['AC/bar']
+        SecondFileOptions = SecondFileOptions + ['AC/bar']
         SecondDirOptions = SecondDirOptions + ['AC']
 
     # We just print all known bugs

@@ -86,7 +86,7 @@ def main():
 	parsed_args = build_parser().parse_args()
  
 	os.chdir('ace')
-	random_engine.setup()
+	random_engine.setup(True)
  	os.chdir('..')
 	#Print the test setup
 	print_setup(parsed_args)
@@ -105,10 +105,11 @@ def main():
 	upper_bound = int(parsed_args.length)
 	while (time.time() - start_time) < runtime:
 			os.chdir('ace')
-			filename = random_engine.produceWorkload(upper_bound, False, True) + '.so'
+			filename = random_engine.produceWorkload(upper_bound, True) + '.so'
 			os.chdir('..')
+			os.chdir('code')
 			subprocess.call('make fuzzer', shell=True)
-      
+			os.chdir('..')
 			#Assign a snapshot file name for replay using CrashMonkey.
 			#If we have a large number of tests in the test suite, then this might blow 
 			#up space. (Feature not implemented yet).
