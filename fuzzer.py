@@ -107,7 +107,7 @@ def main():
 			os.chdir('ace')
 			filename = random_engine.produceWorkload(upper_bound, False, True) + '.so'
 			os.chdir('..')
-			subprocess.call('make fuzzer -B', shell=True)
+			subprocess.call('make fuzzer', shell=True)
       
 			#Assign a snapshot file name for replay using CrashMonkey.
 			#If we have a large number of tests in the test suite, then this might blow 

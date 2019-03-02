@@ -1192,7 +1192,7 @@ def installBloomEntry(perm, param, syncList, syncOptions):
     #hits += 1
     result = longCheck(seq_num)
     if(result):
-      #false_negative += 1
+      false_negative += 1
       return True
     return False
   longAdd(seq_num) 
@@ -1269,10 +1269,7 @@ def setup():
     #print(param_num_max)
               
 
-def generateJLang(modified_sequence, trim):
-    local_dest_dir = dest_dir
-    if(trim):
-      local_dest_dir += "/trim"
+def generateJLang(modified_sequence):
     j_lang_file = 'j-langf' + str(global_count)
     source_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
     copyfile(source_j_lang_file, j_lang_file)
@@ -1292,6 +1289,29 @@ def generateJLang(modified_sequence, trim):
     mv_command = 'mv ' + j_lang_file + ' ../fuzzer/tests/'
     subprocess.call(mv_command, shell=True)
     return j_lang_file
+
+def generateJLangTrim(modified_sequence, length):
+    local_dest_dir = "trim"
+    j_lang_file = 'j-langf' + str(length)
+    source_j_lang_file = '../code/tests/' + local_dest_dir + '/base-j-lang'
+    copyfile(source_j_lang_file, j_lang_file)
+    length_map = {}
+    with open(j_lang_file, 'a') as f:
+        run_line = '\n\n# run\n'
+        f.write(run_line)
+        
+        for insert in xrange(0, len(modified_sequence)):
+          cur_line = buildJlang(modified_sequence[insert], length_map)
+          cur_line_log = '{0}'.format(cur_line) + '\n'
+          f.write(cur_line_log)
+
+    f.close()
+    exec_command = 'python ../ace/cmAdapter.py -b ../code/tests/' + local_dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../code/tests/' + local_dest_dir + '/ -o ' + str(length)
+    subprocess.call(exec_command, shell=True)
+    mv_command = 'mv ' + j_lang_file + ' ../fuzzer/trim/tests/'
+    subprocess.call(mv_command, shell=True)
+    return j_lang_file
+
 
 
 #embeds known bug sequence into workload
@@ -1330,7 +1350,7 @@ def produceWorkload(upper_bound, imbed, jlang_f):
         break
     seq = generateSeq(perm, param,syncList)    
     most_recent_seq = seq
-    print(seq)  
+    #print(seq)  
     modified_seq = generateModifiedSequence(seq)
       #print(bloomFilter)
     #print ("done") 
@@ -1341,30 +1361,43 @@ def produceWorkload(upper_bound, imbed, jlang_f):
     #print (modified_seq)
     jlang = ' '
     if(jlang_f):
-      jlang = generateJLang(modified_seq, False)
+      jlang = generateJLang(modified_seq)
     global_count += 1
     return jlang
 
 
-def getSeg():
+def getSeq():
   return most_recent_seq
 
 #Produces worloads of lengths from 1 -> len(seq) - 1
 def trimWorkload(seq):
-  for index in range(0, len(seq) - 1):
-    seq_trim = seq[index:len(seq)]
-    modified_seq = generateModifiedSequence(seq_trim)
-    generateJLang(modified_seq, True)
+    local_dest_dir = "trim"
+    target_path = '../code/tests/' + local_dest_dir + '/j-lang-files/'
+    if not os.path.exists(target_path):
+        os.makedirs(target_path)
+    dest_j_lang_file = '../code/tests/' + local_dest_dir + '/base-j-lang'
+    source_j_lang_file = '../code/tests/ace-base/base-j-lang'
+    copyfile(source_j_lang_file, dest_j_lang_file)
+    
+    dest_j_lang_cpp = '../code/tests/' + dest_dir + '/base.cpp'
+    source_j_lang_cpp = '../code/tests/ace-base/base.cpp'
+    copyfile(source_j_lang_cpp, dest_j_lang_cpp) 
+    if not os.path.exists(target_path):
+        os.makedirs(target_path)
+    for index in range(len(seq) - 1, 0 , -1):
+      seq_trim = seq[index:len(seq)]
+      print seq_trim
+      modified_seq = generateModifiedSequence(seq_trim)
+      length = len(seq) - 1 - index 
+      generateJLangTrim(modified_seq, length)
 
 
 def main():
     parsed_args = build_parser().parse_args()
     setup()
-    for i in range(int(parsed_args.amount)):
-      val = produceWorkload(int(parsed_args.sequence_len), False, bool(parsed_args.jlang))
-      if val == '':
-        break;
-    print (false_negative)  
+    for index in range(0, 100000):
+      val = produceWorkload(int(parsed_args.sequence_len), False, False)
+    print false_negative  
 
 if __name__ == '__main__':
 	main()
