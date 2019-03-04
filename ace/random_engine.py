@@ -1275,7 +1275,7 @@ def setup(nested, resume_f):
         param_num_max = len(str(len(parameterList[op]) + 1))
     #print(op_num_max)
     #print(param_num_max)
-    if(resume):
+    if(resume_f):
         resume()
               
 
@@ -1343,7 +1343,7 @@ def produceWorkload(upper_bound, jlang_f, debug):
     if(jlang_f):
       jlang = generateJLang(modified_seq)
     if(debug):
-        print time.time() - time_e   
+        print "Jlang: " + str(time.time() - time_e)   
     global_count += 1
     return jlang
 

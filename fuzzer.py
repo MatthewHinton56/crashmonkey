@@ -102,7 +102,7 @@ def main():
     subprocess.call('echo 0 > missing; echo 0 > stat; echo 0 > bugs; echo 0 > others', shell=True)    
 
     #Get the relative path to test directory
-    xfsMonkeyTestPath = './build/fuzzer'
+    xfsMonkeyTestPath = './build/fuzzer/'
     start_time =time.time()
     runtime = float(parsed_args.time)
     upper_bound = int(parsed_args.length)
@@ -113,15 +113,16 @@ def main():
             filename = random_engine.produceWorkload(upper_bound, True, debug) + '.so'
             os.chdir('..')
             if(debug):
-                print time.time() - time_d    
+                print "Workload production: " + str(time.time() - time_d)    
 
             if(debug):
-                time_d = time.time()
+                time_f = time.time()
             os.chdir('code')
             subprocess.call('make fuzzer', shell=True)
             os.chdir('..')
             if(debug):
-                print time.time() - time_d 
+                print "Make: " + str(time.time() - time_f)
+                print "Total: " + str(time.time() - time_d) 
             #Assign a snapshot file name for replay using CrashMonkey.
             #If we have a large number of tests in the test suite, then this might blow 
             #up space. (Feature not implemented yet).
@@ -129,7 +130,7 @@ def main():
 
             #Get full test file path
             test_file = xfsMonkeyTestPath.replace('./build/', '') + filename
-
+            print test_file
             #Build command to run c_harness 
             command = ('cd build; ./c_harness -v -c -P -f '+ parsed_args.flag_dev +' -d '+
             parsed_args.test_dev +' -t ' + parsed_args.fs_type + ' -e ' + 
