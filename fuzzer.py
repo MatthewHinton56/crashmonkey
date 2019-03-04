@@ -102,7 +102,7 @@ def main():
     subprocess.call('echo 0 > missing; echo 0 > stat; echo 0 > bugs; echo 0 > others', shell=True)    
 
     #Get the relative path to test directory
-    xfsMonkeyTestPath = './build/fuzzer/'
+    xfsMonkeyTestPath = './build/tests/fuzzer/'
     start_time =time.time()
     runtime = float(parsed_args.time)
     upper_bound = int(parsed_args.length)
