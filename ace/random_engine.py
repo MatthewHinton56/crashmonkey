@@ -1107,8 +1107,8 @@ def getSequenceNum(perm, paramlist, syncList, syncOptions):
     sync = syncList[index]
     op_num = OperationSet.index(op) + 1
     param_num = parameterList[op].index(param) + 1
-    val = ( str(op_num).ljust(op_num_max,'0') + str(param_num).ljust(param_num_max,'0'))
-    sync_num = str('00') if sync == '' else str(syncOptions.index(sync) + 1).ljust(syncOptions_max, '0')
+    val = ( str(op_num).rjust(op_num_max,'0') + str(param_num).rjust(param_num_max,'0'))
+    sync_num = str('00') if sync == '' else str(syncOptions.index(sync) + 1).rjust(syncOptions_max, '0')
     #print(op_num)
     #print(param_num)
     #print(sync_num)
@@ -1368,7 +1368,30 @@ def resume():
 def getSeq():
   return most_recent_seq
 
+def sequenceDecoder(seq):
+
+    seq_split = [seq[i:i+6] for i in range(0, len(seq), 6)]
+    for split in seq_split:
+        entry_split = [split[i:i+2] for i in range(0, len(seq), 2)]
+        op_num = int(entry_split[0].replace()) - 1
+        print op_num
+        param_num = int(entry_split[1]) - 1
+        print param_num
+        sync_num = entry_split[2]
+        print sync_num
+        op = OperationSet[op_num]
+        print parameterList[op]
+        param = parameterList[op][param_num]
+        if(sync_num == '00'):
+            sync = ''
+        else:
+            sync = syncOptions[int(sync_num) - 1]
+        print (str(op) + ' ' + str(param) + ' ' + str(sync))
+
+
+
 def main():
+    setup(True, False)
     start = time.time()
     parsed_args = build_parser().parse_args()
     setup(True, False)
