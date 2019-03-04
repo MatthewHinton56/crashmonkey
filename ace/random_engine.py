@@ -225,7 +225,6 @@ def build_parser():
     parser.add_argument('--sequence_len', '-l', default='3', help='Number of critical ops in the bugy workload')
     parser.add_argument('--amount', '-n', default='10', help='Number of Workloads to generate?')
     parser.add_argument('--jlang', '-j', default='False', help='If the jlang file is to be generated')
-
     return parser
 
 
@@ -1223,7 +1222,7 @@ count_param = 0
 dest_dir = ""
 syncOptions = []
 
-def setup(nested):
+def setup(nested, resume_f):
     global global_count
     global parameterList
     global num_ops
@@ -1276,6 +1275,8 @@ def setup(nested):
         param_num_max = len(str(len(parameterList[op]) + 1))
     #print(op_num_max)
     #print(param_num_max)
+    if(resume):
+        resume()
               
 
 def generateJLang(modified_sequence):
@@ -1315,20 +1316,18 @@ def imbed_sequence(perm, param, syncList, syncOptions):
         syncOptions.append(bug_sync[i - insert_index])
       
 most_recent_seq = []
-def produceWorkload(upper_bound, jlang_f):
+def produceWorkload(upper_bound, jlang_f, debug):
     global global_count
     global most_recent_seq
     num_ops = random.randint(4, upper_bound)
     perm = generatePerm(int(num_ops))
     param = generateParams(perm)
     syncList = generateSync(perm)
-    while(not longOnly(perm, param, syncList, syncOptions)):
+    while(not longAndShort(perm, param, syncList, syncOptions)):
       num_ops = random.randint(4, upper_bound)
       perm = generatePerm(int(num_ops))
       param = generateParams(perm)
       syncList = generateSync(perm)
-      if bloomFull():
-        break
     seq = generateSeq(perm, param, syncList)    
     most_recent_seq = seq
     #print(seq)  
@@ -1336,16 +1335,35 @@ def produceWorkload(upper_bound, jlang_f):
       #print(bloomFilter)
     #print ("done") 
     #print ("hits:" + str(hits))
-    if (bloomFull()):
-      return ''
     #print(bloomFilter_size - filledSpaces)  
     #print (modified_seq)
     jlang = ' '
+    if(debug):
+        time_e = time.time()
     if(jlang_f):
       jlang = generateJLang(modified_seq)
+    if(debug):
+        print time.time() - time_e   
     global_count += 1
     return jlang
 
+
+def createResumeFile():
+    os.remove("resume.txt")
+    with open("resume.txt","w") as resume:
+        resume.write(str(global_count) +'\n')
+        for line in sequence_storage:
+            if line != '':
+                resume.write(line + "\n")
+
+def resume():
+    global global_count
+    with open("resume.txt","r") as resume:
+        line = resume.readline()
+        if(line != ''): 
+            global_count = int(line)
+        for line in resume:
+                sequence_storage.add(line)
 
 def getSeq():
   return most_recent_seq
@@ -1353,11 +1371,11 @@ def getSeq():
 def main():
     start = time.time()
     parsed_args = build_parser().parse_args()
-    setup(True)
+    setup(True, False)
     avg = 0.0
     for index in range(0, int(parsed_args.amount)):
       test_start = time.time()
-      val = produceWorkload(int(parsed_args.sequence_len), False)
+      val = produceWorkload(int(parsed_args.sequence_len), False, True)
       avg += (time.time() - test_start)
 
     print false_negative  
