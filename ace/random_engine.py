@@ -1255,20 +1255,20 @@ def setup(nested, resume_f):
     createBloomFilter()
     global_count = 0
     dest_dir = "fuzzer"
-    target_path = '../code/tests/' + dest_dir + '/j-lang-files/'
-    target_path_seq = '../code/tests/' + dest_dir + '/seq-files/'
+    target_path = './code/tests/' + dest_dir + '/j-lang-files/'
+    target_path_seq = './code/tests/' + dest_dir + '/seq-files/'
     if not os.path.exists(target_path):
         os.makedirs(target_path)
     if not os.path.exists(target_path_seq):
         os.makedirs(target_path_seq)
     for i in OperationSet:
         parameterList[i] = buildTuple(i)
-    dest_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
-    source_j_lang_file = '../code/tests/ace-base/base-j-lang'
+    dest_j_lang_file = './code/tests/' + dest_dir + '/base-j-lang'
+    source_j_lang_file = './code/tests/ace-base/base-j-lang'
     copyfile(source_j_lang_file, dest_j_lang_file)
     
-    dest_j_lang_cpp = '../code/tests/' + dest_dir + '/base.cpp'
-    source_j_lang_cpp = '../code/tests/ace-base/base.cpp'
+    dest_j_lang_cpp = './code/tests/' + dest_dir + '/base.cpp'
+    source_j_lang_cpp = './code/tests/ace-base/base.cpp'
     copyfile(source_j_lang_cpp, dest_j_lang_cpp) 
     
     op_num_max = len(str(len(OperationSet) + 1))
@@ -1284,7 +1284,7 @@ def setup(nested, resume_f):
 
 def generateJLang(modified_sequence):
     j_lang_file = 'j-langf' + str(global_count)
-    source_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
+    source_j_lang_file = './code/tests/' + dest_dir + '/base-j-lang'
     copyfile(source_j_lang_file, j_lang_file)
     length_map = {}
     with open(j_lang_file, 'a') as f:
@@ -1297,9 +1297,9 @@ def generateJLang(modified_sequence):
           f.write(cur_line_log)
 
     f.close()
-    exec_command = 'python ../ace/cmAdapter.py -b ../code/tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ../code/tests/' + dest_dir + '/ -o ' + str(global_count)
+    exec_command = 'python ./ace/cmAdapter.py -b ./code/tests/' + dest_dir + '/base.cpp -t ' + j_lang_file + ' -p ./code/tests/' + dest_dir + '/ -o ' + str(global_count)
     subprocess.call(exec_command, shell=True)
-    target_path = ' ../code/tests/' + dest_dir + '/j-lang-files/'
+    target_path = ' ./code/tests/' + dest_dir + '/j-lang-files/'
     mv_command = 'mv ' + j_lang_file + target_path
     subprocess.call(mv_command, shell=True)
 
@@ -1313,7 +1313,7 @@ def writeSeqFile(seq):
             f.write(str(op) + '\n')
     
     f.close()
-    target_path = ' ../code/tests/' + dest_dir + '/seq-files/'
+    target_path = ' ./code/tests/' + dest_dir + '/seq-files/'
     mv_command = 'mv ' + seq_file + target_path
     subprocess.call(mv_command, shell=True)
 

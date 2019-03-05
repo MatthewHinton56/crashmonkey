@@ -8,6 +8,9 @@ import stat
 import subprocess
 import argparse
 import time
+import threading
+from Queue import *
+from threading import *
 from ace import random_engine
 
 
@@ -77,6 +80,31 @@ def print_setup(parsed_args):
     print '{0:20}  {1}'.format('Test path', 'build/fuzzer')	
     print '\n', '='*48, '\n'
 
+
+
+
+
+workloads = Queue(20)
+initial = threading.Semaphore(0)
+running = True
+def generateWorkloads(length, debug):
+    count = 0
+    initial_five = True
+    local_workloads = Queue()
+    while running:
+        filename = random_engine.produceWorkload(length, True, debug) + '.so'
+        local_workloads.put(filename)
+        count += 1
+        if(count == 5):
+            subprocess.call('make fuzzer -j4 -s', shell=True)
+            while not local_workloads.empty():
+                workloads.put(local_workloads.get(), block=True)
+            count = 0
+            if(initial_five):
+                initial.release()
+
+
+
 def main():
 
     # Open the log file
@@ -88,9 +116,7 @@ def main():
     parsed_args = build_parser().parse_args()
     debug = eval(parsed_args.debug)
     resume = eval(parsed_args.resume)
-    os.chdir('ace')
     random_engine.setup(True, resume)
-    os.chdir('..')
     #Print the test setup
     print_setup(parsed_args)
 
@@ -106,20 +132,20 @@ def main():
     start_time =time.time()
     runtime = float(parsed_args.time)
     upper_bound = int(parsed_args.length)
+    thread = Thread(target = generateWorkloads, args = (upper_bound, debug,))
+    thread.daemon = True
+    thread.start()
+    initial.acquire()
+
     while (time.time() - start_time) < runtime:
             if(debug):
                 time_d = time.time()
-            os.chdir('ace')
-            filename = random_engine.produceWorkload(upper_bound, True, debug) + '.so'
-            os.chdir('..')
+            filename = workloads.get(block=True)
             if(debug):
                 print "Workload production: " + str(time.time() - time_d)    
 
             if(debug):
                 time_f = time.time()
-            os.chdir('code')
-            subprocess.call('make fuzzer -j4', shell=True)
-            os.chdir('..')
             if(debug):
                 print "Make: " + str(time.time() - time_f)
                 print "Total: " + str(time.time() - time_d) 
