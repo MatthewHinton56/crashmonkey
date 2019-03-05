@@ -118,7 +118,7 @@ def main():
             if(debug):
                 time_f = time.time()
             os.chdir('code')
-            subprocess.call('make fuzzer', shell=True)
+            subprocess.call('make fuzzer -j4', shell=True)
             os.chdir('..')
             if(debug):
                 print "Make: " + str(time.time() - time_f)
@@ -130,12 +130,14 @@ def main():
 
             #Get full test file path
             test_file = xfsMonkeyTestPath.replace('./build/', '') + filename
-            print test_file
             #Build command to run c_harness 
             command = ('cd build; ./c_harness -v -c -P -f '+ parsed_args.flag_dev +' -d '+
             parsed_args.test_dev +' -t ' + parsed_args.fs_type + ' -e ' + 
             str(parsed_args.disk_size) + ' ' + test_file + ' 2>&1')
-    
+
+            if(debug):
+                time_c = time.time()
+
             #Cleanup errors due to prev runs if any
             cleanup()
 
@@ -182,20 +184,20 @@ def main():
                     cleanup()
                     log_file_handle.write(get_time_string() + 'Retry running ' + filename.replace('.so', '') + '\n' + get_time_string() + 'Running... ')	 
             file = filename.replace('.so', '')
-                  
+
             #diff_command = 'tail -vn +1 build/diff* >> diff_results/' + file  + '; rm build/diff*' 
             #subprocess.call('cat build/diff* > out', shell=True)
-            
             #Get the last numbered diff file if present, and clean up diffs
             subprocess.call('cat build/$(ls build/ | grep diff | tail -n -1) > out 2>/dev/null', shell=True)
-            diff_command = './copy_diff.sh out ' + file + ' 1'
-            #subprocess.call('tail -vn +1 build/diff*', shell=True)
-            subprocess.call(diff_command, shell=True)
-            #with open("diff_results/" + file) as bug_file:
-            #    if 'Passed test' not in myfile.read():
-            #        print random_engine.getSeq()
-            #        print bug_file.read()
-            #        break
+            diff_command = './copy_diff_fuzzer.sh out ' + file + ' 1'
+            #subprocess.call('tail -vn +1 build/diff*', shell=True
+
+            subprocess.check_call(diff_command, shell=True)
+            if(debug):
+                print "Crash Monkey: " + str(time.time() - time_c)
+            with open('diff_temp.txt', 'r') as f:
+                if 'Passed test' not in f.read():
+                    break
             
     log_file_handle.write('\n'+ get_time_string() + ': Test completed. See ' + log_file + ' for test summary\n')
     #Stop logging

@@ -1256,8 +1256,11 @@ def setup(nested, resume_f):
     global_count = 0
     dest_dir = "fuzzer"
     target_path = '../code/tests/' + dest_dir + '/j-lang-files/'
+    target_path_seq = '../code/tests/' + dest_dir + '/seq-files/'
     if not os.path.exists(target_path):
         os.makedirs(target_path)
+    if not os.path.exists(target_path_seq):
+        os.makedirs(target_path_seq)
     for i in OperationSet:
         parameterList[i] = buildTuple(i)
     dest_j_lang_file = '../code/tests/' + dest_dir + '/base-j-lang'
@@ -1302,6 +1305,19 @@ def generateJLang(modified_sequence):
 
     return j_lang_file
 
+
+def writeSeqFile(seq):
+    seq_file = 'seqf' + str(global_count)
+    with open(seq_file, 'w') as f:
+        for op in seq:
+            f.write(str(op) + '\n')
+    
+    f.close()
+    target_path = ' ../code/tests/' + dest_dir + '/seq-files/'
+    mv_command = 'mv ' + seq_file + target_path
+    subprocess.call(mv_command, shell=True)
+
+
 #embeds known bug sequence into workload
 def imbed_sequence(perm, param, syncList, syncOptions):
     bug_work_load_index = random.randint(0, len(expected_sequence))
@@ -1342,6 +1358,7 @@ def produceWorkload(upper_bound, jlang_f, debug):
         time_e = time.time()
     if(jlang_f):
       jlang = generateJLang(modified_seq)
+      writeSeqFile(seq)
     if(debug):
         print "Jlang: " + str(time.time() - time_e)   
     global_count += 1
