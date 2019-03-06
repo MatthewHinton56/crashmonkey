@@ -77,7 +77,9 @@ def print_setup(parsed_args):
     #print '{0:20}  {1}'.format('Iterations per test', parsed_args.iterations)
     print '{0:20}  {1}'.format('Test device', parsed_args.test_dev)	
     print '{0:20}  {1}'.format('Flags device', parsed_args.flag_dev)	
-    print '{0:20}  {1}'.format('Test path', 'build/fuzzer')	
+    print '{0:20}  {1}'.format('Test path', 'build/fuzzer')
+    print '{0:20}  {1}'.format('Sequence Size', parsed_args.length)
+    print '{0:20}  {1}'.format('Time in Seconds', parsed_args.time)	
     print '\n', '='*48, '\n'
 
 
@@ -92,8 +94,8 @@ def generateWorkloads(length, debug):
     initial_five = True
     local_workloads = Queue()
     while running:
-        filename = random_engine.produceWorkload(length, True, debug) + '.so'
-        local_workloads.put(filename)
+        filename , seq_num = random_engine.produceWorkload(length, True, debug)
+        local_workloads.put( (filename + '.so' , seq_num ) )
         count += 1
         if(count == 5):
             subprocess.call('make fuzzer -j4 -s', shell=True)
@@ -126,29 +128,20 @@ def main():
     #This is the directory that contains the bug reports from this xfsMonkey run
     subprocess.call('mkdir diff_results', shell=True)
     subprocess.call('echo 0 > missing; echo 0 > stat; echo 0 > bugs; echo 0 > others', shell=True)    
-
+    error_path = './fuzzer_results/'
+    if not os.path.exists(error_path):
+        os.makedirs(error_path)
     #Get the relative path to test directory
     xfsMonkeyTestPath = './build/tests/fuzzer/'
-    start_time =time.time()
     runtime = float(parsed_args.time)
     upper_bound = int(parsed_args.length)
     thread = Thread(target = generateWorkloads, args = (upper_bound, debug,))
     thread.daemon = True
     thread.start()
     initial.acquire()
-
+    start_time =time.time()
     while (time.time() - start_time) < runtime:
-            if(debug):
-                time_d = time.time()
-            filename = workloads.get(block=True)
-            if(debug):
-                print "Workload production: " + str(time.time() - time_d)    
-
-            if(debug):
-                time_f = time.time()
-            if(debug):
-                print "Make: " + str(time.time() - time_f)
-                print "Total: " + str(time.time() - time_d) 
+            filename , seq_num = workloads.get(block=True)
             #Assign a snapshot file name for replay using CrashMonkey.
             #If we have a large number of tests in the test suite, then this might blow 
             #up space. (Feature not implemented yet).
@@ -182,16 +175,17 @@ def main():
             #Sometimes we face an error connecting to socket. So let's retry one more time
             #if CM throws a error for a particular test.
             retry = 0
+            total_output = ''
             while True:
                 p=subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
                 (output,err)=p.communicate()
                 p_status=p.wait()
-
                 # Printing the output on stdout seems too noisy. It's cleaner to have only the result
                 # of each test printed. However due to the long writeback delay, it seems as though
                 # the test case hung. 
                 # (TODO : Add a flag in c_harness to interactively print when we wait for writeback
                 # or start testing)
+                total_output += output + '\n'
                 res = re.sub(r'(?s).*Reordering', '\nReordering', output, flags=re.I)
                 res_final = re.sub(r'==.*(?s)', '\n', res)
 
@@ -222,19 +216,32 @@ def main():
             if(debug):
                 print "Crash Monkey: " + str(time.time() - time_c)
             with open('diff_temp.txt', 'r') as f:
-                if 'Passed test' not in f.read():
-                    break
-            
+                results = f.read()
+                if 'Passed test' not in results:
+                    if not os.path.exists(error_path + file + '/'):
+                        os.makedirs(error_path + file + '/')
+                    seq_file = file.replace('j-lang', 'seq')
+                    cp_command = 'cp ./code/tests/fuzzer/' + file + '.cpp ' + error_path + file + '/'+ file + '.cpp '
+                    subprocess.call(cp_command, shell=True)
+                    cp_command = 'cp ./code/tests/fuzzer/j-lang-files/' + file + ' ' + error_path + file + '/' + file
+                    subprocess.call(cp_command, shell=True)
+                    cp_command = 'cp ./code/tests/fuzzer/seq-files/' + seq_file + ' ' + error_path + file + '/' + seq_file
+                    subprocess.call(cp_command, shell=True) 
+                    with open(error_path + file + '/' + file + '_log.txt', 'w') as info:
+                        info.write(total_output) 
+                if 'Failed test' in results:
+                    cp_command = 'cp ./diff_results/' + file + ' ' + error_path + file + '/' + file + '_error'
+                    subprocess.call(cp_command, shell=True)  
+                val = 'Could not run test' not in results:
+                random_engine.completed_workload(seq_num, val)
+        
+    if(resume):
+        random_engine.createResumeFile()
     log_file_handle.write('\n'+ get_time_string() + ': Test completed. See ' + log_file + ' for test summary\n')
     #Stop logging
     sys.stdout = original
     log_file_handle.close()
     print "\nTesting complete...\n"
-
-    if(resume):
-        os.chdir('ace')
-        random_engine.createResumeFile()
-        os.chdir('..')
 
 if __name__ == '__main__':
     main()

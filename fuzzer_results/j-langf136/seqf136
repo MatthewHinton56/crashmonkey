@@ -1,0 +1,8 @@
+('creat', 'foo')
+('fsync', 'AC/bar', '0')
+('link', ('foo', 'AC/bar'))
+('fsync', 'B', '0')
+('write', ('A/foo', 'overlap_extend'))
+('fsync', 'AC/foo', '0')
+('rename', ('A', 'AC'))
+('fsync', 'A/bar', '1')

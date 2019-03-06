@@ -1,0 +1,14 @@
+--------------------Test #11--------------------
+2019-03-05 17:25:35.261 Running test : j-langf65as Crashmonkey standalone 
+Running test #11 : j-langf652019-03-05 17:25:38.881 
+Error in test run, exits with status: 2304
+Unable to remove wrapper device
+2019-03-05 17:25:39.917 Retry running j-langf65
+2019-03-05 17:25:39.917 Running... 2019-03-05 17:25:40.118 
+Error starting socket to listen on 98
+2019-03-05 17:25:40.132 Retry running j-langf65
+2019-03-05 17:25:40.132 Running... 2019-03-05 17:25:43.197 
+Error in test run, exits with status: 2304
+Unable to remove wrapper device
+2019-03-05 17:25:44.364 Retry running j-langf65
+2019-03-05 17:25:44.364 Running... 2019-03-05 17:25:44.475 Could not run test : j-langf65

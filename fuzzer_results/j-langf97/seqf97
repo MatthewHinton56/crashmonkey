@@ -1,0 +1,5 @@
+('mmapwrite', 'foo', 'append', '0')
+('mkdir', 'A')
+('sync', '0')
+('mmapwrite', 'AC/foo', 'append', '0')
+('fdatasync', 'foo', '1')

@@ -1,0 +1,84 @@
+running 0x7ffff182cfe8
+========== PHASE 0: Setting up CrashMonkey basics ==========
+Inserting RAM disk module
+Loading test case
+Loading permuter
+Updating dirty_expire_time_centisecs to 3000
+
+========== PHASE 1: Creating base disk image ==========
+Formatting test drive
+mke2fs 1.42.13 (17-May-2015)
+Discarding device blocks:   1024/102400             done                            
+Creating filesystem with 102400 1k blocks and 25688 inodes
+Filesystem UUID: ff6542ce-c0cf-4fab-ad09-da3ce72cc02b
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables:  0/13     done                            
+Writing inode tables:  0/13     done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information:  0/13     done
+
+Mounting test file system for pre-test setup
+Running pre-test setup
+Unmounting test file system after pre-test setup
+Making new snapshot
+cloning device /dev/cow_ram0
+
+========== PHASE 2: Recording user workload ==========
+Clearing caches
+Inserting wrapper module into kernel
+Getting wrapper device ioctl fd
+Clearing wrapper device logs
+Enabling wrapper device logging
+Mounting wrapper file system
+Running test profile
+Error in test run, exits with status: 5632
+Unable to remove wrapper device
+
+running 0x7fffb21df8f8
+========== PHASE 0: Setting up CrashMonkey basics ==========
+Error starting socket to listen on 98
+
+running 0x7fff2089fa98
+========== PHASE 0: Setting up CrashMonkey basics ==========
+Inserting RAM disk module
+Loading test case
+Loading permuter
+Updating dirty_expire_time_centisecs to 3000
+
+========== PHASE 1: Creating base disk image ==========
+Formatting test drive
+mke2fs 1.42.13 (17-May-2015)
+Discarding device blocks:   1024/102400             done                            
+Creating filesystem with 102400 1k blocks and 25688 inodes
+Filesystem UUID: 64453e54-73b2-429c-8a88-2f780e5dc406
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables:  0/13     done                            
+Writing inode tables:  0/13     done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information:  0/13     done
+
+Mounting test file system for pre-test setup
+Running pre-test setup
+Unmounting test file system after pre-test setup
+Making new snapshot
+cloning device /dev/cow_ram0
+
+========== PHASE 2: Recording user workload ==========
+Clearing caches
+Inserting wrapper module into kernel
+Getting wrapper device ioctl fd
+Clearing wrapper device logs
+Enabling wrapper device logging
+Mounting wrapper file system
+Running test profile
+Error in test run, exits with status: 5632
+Unable to remove wrapper device
+
+running 0x7fff43bdec58
+========== PHASE 0: Setting up CrashMonkey basics ==========
+Error starting socket to listen on 98
+

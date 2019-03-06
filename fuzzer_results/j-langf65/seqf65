@@ -1,0 +1,7 @@
+('truncate', ('foo', 'unaligned'))
+('fsync', 'AC/foo', '0')
+('rename', ('A', 'B'))
+('fsync', 'AC', '0')
+('creat', 'AC/foo')
+('none', '0')
+('mmapwrite', 'foo', 'append', '1')

@@ -994,11 +994,11 @@ def getSyncOptions(file_list):
     none = ('none')
     SyncSet = list()
     SyncSet.append(none)
+    SyncSet.append(sync)
     for i in xrange(0, len(d)):
         tup = list(fsync)
         tup.append(d[i])
         SyncSet.append(tuple(tup))
-    SyncSet.append(sync)
     return SyncSet    
     
 def generatePerm(length):
@@ -1020,8 +1020,8 @@ def generateSync(perm):
       if perm[index] == 'fdatasync' or perm[index] == 'mmapwrite':
         sync.append('')
       else:
-        lowerbound = 1 if (index == len(perm) - 1) else 0
-        sync.append(syncOptions[random.randint(lowerbound, len(syncOptions)) - 1])
+        lowerbound = 2 if (index == len(perm) - 1) else 0
+        sync.append(syncOptions[random.randint(lowerbound, len(syncOptions) - 1)])
     return sync
     
   
@@ -1095,7 +1095,7 @@ def generateModifiedSequence(seq):
 param_num_max = 0
 op_num_max = 0        
         
-def getSequenceNum(perm, paramlist, syncList, syncOptions):
+def getSequenceNum(perm, paramlist, syncList):
   global param_num_max
   global op_num_max
   seq_list = []
@@ -1158,12 +1158,11 @@ def createBloomFilter():
   global bloomFilter
   bloomFilter = [False] * bloomFilter_size
 
-def longAndShort(perm, param, syncList, syncOptions):
+def longAndShort(seq_string):
   global hits
   global false_positive
   global false_negative
   global filledSpaces
-  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
   djb2_val = djb2(seq_string) % bloomFilter_size
   sbdm_val = sdbm(seq_string) % bloomFilter_size
   python_val = hash(seq_string) % bloomFilter_size
@@ -1179,16 +1178,14 @@ def longAndShort(perm, param, syncList, syncOptions):
   bloomFilter[python_val] = True
   return True
 
-def longOnly(perm, param, syncList, syncOptions):
-  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
+def longOnly(seq_string):
   return longCheck(seq_string)  
 
-def shortOnly(perm, param, syncList, syncOptions):
+def shortOnly(seq_string):
   global hits
   global false_positive
   global false_negative
   global filledSpaces
-  seq_string = getSequenceNum(perm, param, syncList, syncOptions)
   djb2_val = djb2(seq_string) % bloomFilter_size
   sbdm_val = sdbm(seq_string) % bloomFilter_size
   python_val = hash(seq_string) % bloomFilter_size
@@ -1244,16 +1241,15 @@ def setup(nested, resume_f):
     global param_num_max
     global op_num_max
     global syncOptions
-
+    global workload_count 
     if nested:
       FileOptions = FileOptions + ['AC/foo']
       SecondFileOptions = SecondFileOptions + ['AC/bar']
       SecondDirOptions = SecondDirOptions + ['AC']
     file_list = list(set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))    
     syncOptions = getSyncOptions(file_range(file_list))    
-
-    createBloomFilter()
     global_count = 0
+    workload_count = 0
     dest_dir = "fuzzer"
     target_path = './code/tests/' + dest_dir + '/j-lang-files/'
     target_path_seq = './code/tests/' + dest_dir + '/seq-files/'
@@ -1339,11 +1335,13 @@ def produceWorkload(upper_bound, jlang_f, debug):
     perm = generatePerm(int(num_ops))
     param = generateParams(perm)
     syncList = generateSync(perm)
-    while(not longAndShort(perm, param, syncList, syncOptions)):
+    sequence_num = getSequenceNum(perm, param, syncList)
+    while(not longOnly(sequence_num)):
       num_ops = random.randint(4, upper_bound)
       perm = generatePerm(int(num_ops))
       param = generateParams(perm)
       syncList = generateSync(perm)
+      sequence_num = getSequenceNum(perm, param, syncList)
     seq = generateSeq(perm, param, syncList)    
     most_recent_seq = seq
     #print(seq)  
@@ -1362,48 +1360,46 @@ def produceWorkload(upper_bound, jlang_f, debug):
     if(debug):
         print "Jlang: " + str(time.time() - time_e)   
     global_count += 1
-    return jlang
+    return (jlang, sequence_num)
+
+
+
+
+workload_count = 0
+seq_list = list()
+
+
+def completed_workload(seq_num, add):
+    global workload_count 
+    if add:
+        seq_list.append(seq_num)
+    workload_count += 1
+
 
 
 def createResumeFile():
     os.remove("resume.txt")
     with open("resume.txt","w") as resume:
-        resume.write(str(global_count) +'\n')
-        for line in sequence_storage:
+        resume.write(str(workload_count) +'\n')
+        for line in seq_list:
             if line != '':
                 resume.write(line + "\n")
+    resume.close()
 
 def resume():
     global global_count
+    global workload_count 
+    global seq_list
     with open("resume.txt","r") as resume:
         line = resume.readline()
         if(line != ''): 
             global_count = int(line)
+            workload_count = global_count
         for line in resume:
-                sequence_storage.add(line)
+                nline = line.replace('\n', '')
+                sequence_storage.add(nline)
+                seq_list.append(nline)
 
-def getSeq():
-  return most_recent_seq
-
-def sequenceDecoder(seq):
-
-    seq_split = [seq[i:i+6] for i in range(0, len(seq), 6)]
-    for split in seq_split:
-        entry_split = [split[i:i+2] for i in range(0, len(seq), 2)]
-        op_num = int(entry_split[0].replace()) - 1
-        print op_num
-        param_num = int(entry_split[1]) - 1
-        print param_num
-        sync_num = entry_split[2]
-        print sync_num
-        op = OperationSet[op_num]
-        print parameterList[op]
-        param = parameterList[op][param_num]
-        if(sync_num == '00'):
-            sync = ''
-        else:
-            sync = syncOptions[int(sync_num) - 1]
-        print (str(op) + ' ' + str(param) + ' ' + str(sync))
 
 
 
