@@ -624,7 +624,6 @@ def checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_
             modified_sequence.insert(modified_pos, insertOpen(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
 
-
     if file_name in FileOptions or file_name in SecondFileOptions:
         if file_name not in open_file_map or open_file_map[file_name] == 0:
         #Insert dependency - open before the command
@@ -674,6 +673,31 @@ def checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open
         modified_pos += 1
     return modified_pos
 
+def deleteScan(open_dir_map, open_file_map, new_name):
+    deleteScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
+    for f in deleteScan:
+        if f.startswith(new_name):
+            if f in open_dir_map:
+                open_dir_map.pop(f, None)
+            
+            if f in open_file_map:
+                open_file_map.pop(f, None) 
+
+def renameScan(open_dir_map, open_file_map, old_name, new_name):
+    renameScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
+    if new_name in (DirOptions + SecondDirOptions):
+        deleteScan(open_dir_map, open_file_map, new_name)
+    for f in renameScan:
+        if f.startswith(old_name):
+            if f in open_dir_map:
+                open_dir_map.pop(f, None)
+                print f.replace(old_name, new_name)
+                open_dir_map[f.replace(old_name, new_name)] = 0
+            
+            if f in open_file_map:
+                open_file_map.pop(f, None)
+                print f.replace(old_name, new_name)
+                open_file_map[f.replace(old_name, new_name)] = 0     
 
 # Handles satisfying dependencies, for a given core FS op
 def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
@@ -682,7 +706,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
     else:
         command = current_sequence[pos][0]
     
-    #    print 'Command = ', command
+        print 'Command = ', command
     
     if command == 'creat' or command == 'mknod':
         
@@ -761,7 +785,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         #If the file was open during rename, does the handle now point to new file?
         first_file = current_sequence[pos][1][0]
         second_file = current_sequence[pos][1][1]
-        
+        print first_file  + ' - ' + second_file
         modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
         modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
@@ -774,13 +798,22 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             modified_sequence.insert(modified_pos, insertClose(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
         
+        if second_file in open_dir_map:
+            modified_sequence.insert(modified_pos, insertUnlink(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
+            modified_pos += 1
+            modified_sequence.insert(modified_pos, insertRmdir(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
+            modified_pos += 1
+        
         #We have removed the first file, and created a second file
         if first_file in FileOptions or first_file in SecondFileOptions:
             open_file_map.pop(first_file, None)
             open_file_map[second_file] = 0
         elif first_file in DirOptions or first_file in SecondDirOptions:
             open_dir_map.pop(first_file, None)
+
+            renameScan(open_dir_map, open_file_map, first_file, second_file)
             open_dir_map[second_file] = 0
+
         
 
     elif command == 'symlink':
@@ -1105,6 +1138,7 @@ def create_trim_workloads(seq, jlang):
         copyfile(source_j_lang_cpp, dest_j_lang_cpp) 
     for i in range(0, len(seq) - 1):
         sliced = seq[0:i] + seq[(i+1):len(seq)]
+        print 'hello' + str(i)
         slice_modified = generateModifiedSequence(sliced)
         if jlang:
             generateJLang(slice_modified, i)

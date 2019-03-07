@@ -22,6 +22,9 @@ permuters:
 fuzzer: 
 	$(MAKE) -C $(CODEDIR) fuzzer
 
+trim:
+	$(MAKE) -C $(CODEDIR) trim
+
 $(SUBDIRS):
 	$(MAKE) -C $@ all
 

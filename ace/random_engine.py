@@ -604,6 +604,22 @@ def checkClosed(current_sequence, pos, modified_sequence, modified_pos, open_dir
         modified_pos += 1
     return modified_pos
 
+
+def renameScan(open_dir_map, open_file_map, old_name, new_name):
+    renameScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
+    for f in renameScan:
+        if f.startswith(old_name):
+            if f in open_dir_map:
+                open_dir_map.pop(f, None)
+                open_dir_map[f.replace(old_name, new_name)] = 0
+            
+            if f in open_file_map:
+                open_file_map.pop(f, None)
+                open_file_map[f.replace(old_name, new_name)] = 0               
+
+
+
+
 #If the op is remove xattr, we need to ensure, there's atleast one associated xattr to the file
 def checkXattr(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
     file_name = current_sequence[pos][1]
@@ -733,6 +749,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             open_file_map[second_file] = 0
         elif first_file in DirOptions or first_file in SecondDirOptions:
             open_dir_map.pop(first_file, None)
+            renameScan(open_dir_map, open_file_map, first_file, second_file)
             open_dir_map[second_file] = 0
         
 

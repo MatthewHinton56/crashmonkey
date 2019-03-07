@@ -113,8 +113,17 @@ CM_FUZZER = \
                    
 CM_FUZZER_OUT = \
 		$(foreach TEST, $(CM_FUZZER), \
-			$(BUILD_DIR)/tests/fuzzer/$(TEST))        
+			$(BUILD_DIR)/tests/fuzzer/$(TEST))    
 
+CM_TRIM_EXCLUDE = base.cpp
+CM_TRIM = \
+		$(patsubst %.cpp, %.so, \
+			$(filter-out $(CM_TRIM_EXCLUDE), \
+					$(notdir $(wildcard $(CURDIR)/tests/trim/*.cpp))))
+                   
+CM_TRIM_OUT = \
+		$(foreach TEST, $(CM_TRIM), \
+			$(BUILD_DIR)/tests/trim/$(TEST)) 
 
 .PHONY: all modules c_harness user_tool $(CM_TESTS) $(CM_PERMUTERS) clean
 
@@ -129,7 +138,8 @@ all: \
 		tests \
 		seq1 \
 		permuters \
-    fuzzer \
+    	fuzzer \
+		trim \
 
 modules: \
 		$(foreach MOD, $(MODULES), $(addsuffix .c, $(MOD))) \
@@ -157,6 +167,9 @@ gentests: \
    
 fuzzer: \
     $(CM_FUZZER_OUT)
+
+trim: \
+	$(CM_TRIM_OUT)
 
 permuters: \
 		$(foreach PERMUTER, $(CM_PERMUTERS), $(BUILD_DIR)/permuter/$(PERMUTER))
@@ -279,7 +292,21 @@ $(CM_FUZZER_OUT): $(BUILD_DIR)/tests/fuzzer/%.so : \
 	mkdir -p $(@D)
 	$(GPP) $(GOPTS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
 		-o $@ $^
-   
+
+$(CM_TRIM_OUT): $(BUILD_DIR)/tests/trim/%.so : \
+		tests/trim/%.cpp \
+		$(BUILD_DIR)/tests/BaseTestCase.o \
+		$(BUILD_DIR)/user_tools/src/actions.o \
+		$(BUILD_DIR)/user_tools/src/wrapper.o \
+		$(BUILD_DIR)/user_tools/src/workload.o \
+		$(BUILD_DIR)/utils/DiskMod.o \
+		$(BUILD_DIR)/utils/communication/BaseSocket.o \
+		$(BUILD_DIR)/utils/communication/ClientSocket.o \
+		$(BUILD_DIR)/utils/communication/ClientCommandSender.o \
+		$(BUILD_DIR)/results/DataTestResult.o
+	mkdir -p $(@D)
+	$(GPP) $(GOPTS) $(GOTPSSO) $(XATTR_DEF_FLAG) -Wl,-soname,$(notdir $@) \
+		-o $@ $^  
 
 $(BUILD_DIR)/tests/%.so: \
 		tests/%.cpp \
