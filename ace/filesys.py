@@ -9,6 +9,7 @@ class File_O:
         self.parent = parent
         self.attribute = False
         self.open = False
+        self.length = 0
     
     def __str__(self):
         return 'Name: ' + self.name + ' Parent: ' + self.parent.name + ' Attribute: ' + str(self.attribute) + ' open: ' + str(self.open)
@@ -42,6 +43,7 @@ class Directory(File_O):
         self.children = dict()
         self.attribute = False
         self.open = False
+        self.length = 0
 
     def addChild(self, child):
         self.children[child.name] = child
@@ -105,7 +107,7 @@ def createFile(dir, path, is_dir):
         scan_dir.addChild(new_file)
         return new_file
 
-#
+
 def findFile(dir, path):
     pathList = splitPath(path)
     name = pathList[len(pathList)-1]
@@ -116,11 +118,41 @@ def findFile(dir, path):
     return scan_dir.getChild(name)
 
 
-def unlinkFile(dir, file):
-    path = splitPath(file)
+def unlinkFile(dir, filePath):
+    path = splitPath(filePath)
     parentPath = '/'.join(path[:(len(path)-1)])
     parentDir = findFile(dir, parentPath)
-    del parentDir[path[len(path)-1]]
+    parentDir.removeChild(path[len(path) - 1])
+
+
+def checkExistsDep(modified_seq, filePath, root):
+    bool is_dir = filePath.endswith('/')
+    if is_dir:
+        if not hasFile(root, filePath):
+            dir = createFile(root, filePath, True)
+            modified_seq.append(('mkdir', filePath))
+        else:
+            dir = findFile(root, filePath)    
+        if not dir.open:
+            dir.open = True
+            modified_seq.append(('opendir', filePath))
+        return dir
+    else:
+        if not hasFile(root, filePath):
+            file = createFile(root, filePath, False)
+        else
+            file = findFile(root, filePath)
+        if not file.open:
+            file.open = True
+        modified_seq.append(('open', filePath))
+        return file
+
+
+def writeDependency(modified_seq, filePath, root):
+    file = findFile(root, filePath)
+    if file.length == 0:
+        file.length += 1
+        modified_seq.append(('write', (filePath, 'append')))
 
 
 root = None
@@ -137,11 +169,21 @@ def parentExist(modified_seq, parentPath, root):
             modified_seq.append(('mkdir', test))
             createFile(root, test, True) 
 
-def createDepency(modified_seq, file, root):
-    if hasFile(root, file):
-        unlinkFile(root, file)
-        modified_seq.append(('unlink', file))
+def createDependency(modified_seq, filePath, root):
+    if hasFile(root, filePath):
+        unlinkFile(root, filePath)
+        modified_seq.append(('unlink', filePath))
 
+
+def closeAndUnlink(modified_seq, filePath, root, unlink):
+    if hasFile(root, filePath):
+        file = findFile(root, filePath)
+        if file.open:
+            file.open = False
+            modified_seq.append(('close', filePath))
+        if unlink:
+            file.parent.removeChild(file)
+            modified_seq.append(('unlink', filePath))
 
 def printFileSys(root):
     q = Queue()
@@ -170,26 +212,135 @@ def dirDeleteHelper(modified_seq, dir):
 
 def dirDelete(modified_seq, dir):
     dirDeleteHelper(modified_seq, dir)
-    del dir.parent.children[dir.name]
+    dir.parent.removeChild(dir)
 
 
-def preCreat(modified_seq, file, root):
-    path = splitPath(file)
+def preCreat(modified_seq, filePath, root):
+    path = splitPath(filePath)
     parentPath = '/'.join(parentPath[:(len(path)-1)])
     parentExist(modified_seq,parentPath, root)
-    createDepency(modified_seq, file, root)
+    createDependency(modified_seq, filePath, root)
 
-def postCreat(file, root):
-    new_file = createFile(root, file, False)
+def postCreat(filePath, root):
+    new_file = createFile(root, filePath, False)
     new_file.open = True
 
-def preMkdir(modified_seq, dir, root):
-    if hasFile(root, dir):
-        dirDelete(modified_seq, findFile(root, dir))
+def preMkdirKNode(modified_seq, dirPath, root):
+    if hasFile(root, dirPath):
+        dirDelete(modified_seq, findFile(root, dirPath))
 
-def postMkdir(file, root):
-    new_file = createFile(root, file, True)
+def postMkdirKNode(filePath, root):
+    new_file = createFile(root, filePath, True)
     new_file.open = False
+
+def preFalloc(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq,parentPath, root)
+    checkExistsDep(modified_seq, filePath, root)
+    writeDependency(modified_seq, filePath, root)
+
+def postFalloc():
+    pass
+
+def preWrite(modified_seq, filePath,command, option, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPath, root)
+    file = checkExistsDep(modified_seq, filePath, root)
+    if option == 'append':
+        file.length += 1
+     elif option == 'overlap' or 'overlap_aligned' or 'overlap_unaligned':
+        writeDependency(modified_seq, filePath, root)
+    if command == 'dwrite':
+        file.open = False
+
+def postWrite():
+    pass
+
+def preLink(modified_seq, filePathOne, filePathTwo, root):
+    pathOne = splitPath(filePathOne)
+    parentPathOne = '/'.join(parentPathOne[:(len(path)-1)])
+    parentExist(modified_seq, parentPathOne, root)
+    pathTwo = splitPath(filePath)
+    parentPathTwo = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPathTwo, root)
+    checkExistsDep(modified_seq, filePathOne, root)
+    closeAndUnlink(modified_seq, filePathTwo, root, True)
+
+def postLink(filePathOne, filePathTwo, root):
+    createFile(root, filePathTwo, False)
+
+def preRename(modified_seq, filePathOne, filePathTwo, root):
+    pathOne = splitPath(filePathOne)
+    parentPathOne = '/'.join(parentPathOne[:(len(path)-1)])
+    parentExist(modified_seq, parentPathOne, root)
+    pathTwo = splitPath(filePath)
+    parentPathTwo = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPathTwo, root)
+    checkExistsDep(modified_seq, filePathOne, root)
+    closeAndUnlink(modified_seq, filePathTwo, root, False)
+
+def postRename(filePathOne, filePathTwo, root):
+    file = findFile(root, filePathOne)
+    file.parent.removeChild(file)
+    createFile(root, filePathTwo, False)
+
+def preSymLink(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq,parentPath, root)
+
+def postSymLink():
+    pass
+
+def preRemoveUnlink(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPath, root)
+    checkExistsDep(modified_seq, filePath, root)
+    closeAndUnlink(modified_seq, filePath, root, False)    
+
+def postRemoveUnlink(filePath, root):
+    file = findFile(root, filePath)
+    file.parent.removeChild(file)
+
+def preRemovexattr(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPath, root)
+    file = checkExistsDep(modified_seq, filePath, root)
+    if not file.attribute:
+        file.attribute = True
+        modified_seq.append(('fsetxattr', filePath))
+
+def postRemovexattr(filePath, root):
+    file = findFile(root, filePath)
+    file.attribute = False
+
+def preFSyncSet(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq, parentPath, root)
+    file = checkExistsDep(modified_seq, filePath, root)
+
+def postFSyncSet(command, filePath, root):
+    if command == 'fsetxattr':
+        file = findFile(root, filePath)
+        file.attribute = True
+
+def preTruncate(modified_seq, filePath, root):
+    path = splitPath(filePath)
+    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentExist(modified_seq,parentPath, root)
+    checkExistsDep(modified_seq, filePath, root)
+    writeDependency(modified_seq, filePath, root)
+
+def postTruncate(filePath, root, option):
+    if command == 'aligned':
+        file = findFile(root, filePath)
+        file.length = 0
+
 
 
 def main():

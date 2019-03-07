@@ -785,7 +785,7 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
         #If the file was open during rename, does the handle now point to new file?
         first_file = current_sequence[pos][1][0]
         second_file = current_sequence[pos][1][1]
-        print first_file  + ' - ' + second_file
+        
         modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
         modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
@@ -798,19 +798,12 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             modified_sequence.insert(modified_pos, insertClose(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
         
-        if second_file in open_dir_map:
-            modified_sequence.insert(modified_pos, insertUnlink(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-            modified_sequence.insert(modified_pos, insertRmdir(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        
         #We have removed the first file, and created a second file
         if first_file in FileOptions or first_file in SecondFileOptions:
             open_file_map.pop(first_file, None)
             open_file_map[second_file] = 0
         elif first_file in DirOptions or first_file in SecondDirOptions:
             open_dir_map.pop(first_file, None)
-
             renameScan(open_dir_map, open_file_map, first_file, second_file)
             open_dir_map[second_file] = 0
 
@@ -1171,17 +1164,17 @@ def generateJLang(modified_sequence, num):
 
 def main():
     seq = list()
-    parsed_args = build_parser().parse_args()
-    file = open(parsed_args.file_path, 'r')
-    snapshot = eval(parsed_args.snapshot)
-    checkpoint = snapshot - 1 
+    #parsed_args = build_parser().parse_args()
+    #file = open(parsed_args.file_path, 'r')
+    #snapshot = eval(parsed_args.snapshot)
+    #checkpoint = snapshot - 1 
     #seq_string = file.read()
     #print seq_string
-    for line in file:
-        cline = line.replace('\n', '')
-        seq.append(eval(cline))
-    seq_checkpoint_trim = findAndRemovePostCheckpoint(seq, checkpoint)
-    print seq_checkpoint_trim
-    create_trim_workloads(seq_checkpoint_trim, False)
+    #for line in file:
+    #    cline = line.replace('\n', '')
+   #     seq.append(eval(cline))
+    #seq_checkpoint_trim = findAndRemovePostCheckpoint(seq, checkpoint)
+    #print seq_checkpoint_trim
+    #create_trim_workloads(seq_checkpoint_trim, False)
 if __name__ == '__main__':
 	main()
