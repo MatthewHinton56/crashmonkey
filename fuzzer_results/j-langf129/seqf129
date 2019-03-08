@@ -1,6 +1,0 @@
-('mmapwrite', 'AC/foo', 'append', '0')
-('rename', ('A', 'AC'))
-('sync', '0')
-('write', ('AC/foo', 'append'))
-('fsync', 'foo', '0')
-('fdatasync', 'A/foo', '1')

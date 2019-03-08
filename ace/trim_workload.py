@@ -32,9 +32,9 @@ SecondFileOptions = ['bar', 'A/bar'] #bar
 
 #A,B are  subdirectories under test
 # test directory(root) is under a separate list because we don't want to try to create/remove it in the workload. But we should be able to fsync it.
-DirOptions = ['A']
+DirOptions = ['A/']
 TestDirOptions = ['test']
-SecondDirOptions = ['B']
+SecondDirOptions = ['B/']
 
 
 #this will take care of offset + length combo
@@ -75,16 +75,16 @@ def SiblingOf(file):
         return 'B/bar'
     elif file == 'B/bar' :
         return 'B/foo'
-    elif file == 'AC/foo':
-        return 'AC/bar'
-    elif file == 'AC/bar' :
-        return 'AC/foo'
-    elif file == 'A' :
-        return 'B'
-    elif file == 'B':
-        return 'A'
-    elif file == 'AC' :
-	return 'AC'
+    elif file == 'A/C/foo':
+        return 'A/C/bar'
+    elif file == 'A/C/bar' :
+        return 'A/C/foo'
+    elif file == 'A/' :
+        return 'B/'
+    elif file == 'B/':
+        return 'A/'
+    elif file == 'A/C/' :
+	    return 'A/C/'
     elif file == 'test':
         return 'test'
 
@@ -92,14 +92,14 @@ def SiblingOf(file):
 def Parent(file):
     if file == 'foo' or file == 'bar':
         return 'test'
-    if file == 'A/foo' or file == 'A/bar' or file == 'AC':
-        return 'A'
+    if file == 'A/foo' or file == 'A/bar' or file == 'A/C/':
+        return 'A/'
     if file == 'B/foo' or file == 'B/bar':
-        return 'B'
-    if file == 'A' or file == 'B' or file == 'test':
+        return 'B/'
+    if file == 'A/' or file == 'B/' or file == 'test':
         return 'test'
-    if file == 'AC/foo' or file == 'AC/bar':
-        return 'AC'
+    if file == 'A/C/foo' or file == 'A/C/bar':
+        return 'A/C/'
 
 
 # Given a list of files, return a list of related files.
@@ -450,7 +450,7 @@ def checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir
     # TODO : We heavily depend on the pre-defined file list. Need to generalize it at some point.
     if file_name in open_dir_map and file_name != 'test':
         #if dir is A, remove contents within it too
-        if file_name == 'A':
+        if file_name == 'A/':
             if 'A/foo' in open_file_map and open_file_map['A/foo'] == 1:
                 file = 'A/foo'
                 modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
@@ -472,38 +472,38 @@ def checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
             
-            if 'AC' in open_dir_map and open_dir_map['AC'] == 1:
-                file = 'AC'
+            if 'A/C/' in open_dir_map and open_dir_map['A/C/'] == 1:
+                file = 'A/C/'
                 modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
-            if 'AC' in open_dir_map:
-                if 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 1:
-                    file = 'AC/foo'
+            if 'A/C/' in open_dir_map:
+                if 'A/C/foo' in open_file_map and open_file_map['A/C/foo'] == 1:
+                    file = 'A/C/foo'
                     modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
                     modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
-                elif 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 0:
-                    file = 'AC/foo'
+                elif 'A/C/foo' in open_file_map and open_file_map['A/C/foo'] == 0:
+                    file = 'A/C/foo'
                     modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
-                if 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 1:
-                    file = 'AC/bar'
+                if 'A/C/bar' in open_file_map and open_file_map['A/C/bar'] == 1:
+                    file = 'A/C/bar'
                     modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
                     modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
-                elif 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 0:
-                    file = 'AC/bar'
+                elif 'A/C/bar' in open_file_map and open_file_map['A/C/bar'] == 0:
+                    file = 'A/C/bar'
                     modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                     modified_pos += 1
 
-                file = 'AC'
+                file = 'A/C/'
                 modified_sequence.insert(modified_pos, insertRmdir(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
 
 
-        if file_name == 'B':
+        if file_name == 'B/':
             if 'B/foo' in open_file_map and open_file_map['B/foo'] == 1:
                 file = 'B/foo'
                 modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
@@ -525,25 +525,25 @@ def checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
 
-        if file_name == 'AC':
-            if 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 1:
-                file = 'AC/foo'
+        if file_name == 'A/C/':
+            if 'A/C/foo' in open_file_map and open_file_map['A/C/foo'] == 1:
+                file = 'A/C/foo'
                 modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
-            elif 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 0:
-                file = 'AC/foo'
+            elif 'A/C/foo' in open_file_map and open_file_map['A/C/foo'] == 0:
+                file = 'A/C/foo'
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
-            if 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 1:
-                file = 'AC/bar'
+            if 'A/C/bar' in open_file_map and open_file_map['A/C/bar'] == 1:
+                file = 'A/C/bar'
                 modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
-            elif 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 0:
-                file = 'AC/bar'
+            elif 'A/C/bar' in open_file_map and open_file_map['A/C/bar'] == 0:
+                file = 'A/C/bar'
                 modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
 
@@ -560,10 +560,10 @@ def checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos,
     if isinstance(file_names, basestring):
         file_name = file_names
         #Parent dir doesn't exist
-        if (Parent(file_name) == 'A' or Parent(file_name) == 'B')  and Parent(file_name) not in open_dir_map:
+        if (Parent(file_name) == 'A/' or Parent(file_name) == 'B/')  and Parent(file_name) not in open_dir_map:
             modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
-        if Parent(file_name) == 'AC' and Parent(file_name) not in open_dir_map:
+        if Parent(file_name) == 'A/C/' and Parent(file_name) not in open_dir_map:
             if Parent(Parent(file_name)) not in open_dir_map:
                 modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name)), open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
@@ -578,11 +578,11 @@ def checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos,
         file_name2 = file_names[1]
         
         #Parent dir doesn't exist
-        if (Parent(file_name) == 'A' or Parent(file_name) == 'B')  and Parent(file_name) not in open_dir_map:
+        if (Parent(file_name) == 'A/' or Parent(file_name) == 'B/')  and Parent(file_name) not in open_dir_map:
             modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
         
-        if Parent(file_name) == 'AC' and Parent(file_name) not in open_dir_map:
+        if Parent(file_name) == 'A/C/' and Parent(file_name) not in open_dir_map:
             if Parent(Parent(file_name)) not in open_dir_map:
                 modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name)), open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
@@ -591,11 +591,11 @@ def checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos,
             modified_pos += 1
 
         #Parent dir doesn't exist
-        if (Parent(file_name2) == 'A' or Parent(file_name2) == 'B')  and Parent(file_name2) not in open_dir_map:
+        if (Parent(file_name2) == 'A/' or Parent(file_name2) == 'B/')  and Parent(file_name2) not in open_dir_map:
             modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name2), open_dir_map, open_file_map, file_length_map, modified_pos))
             modified_pos += 1
 
-        if Parent(file_name2) == 'AC' and Parent(file_name2) not in open_dir_map:
+        if Parent(file_name2) == 'A/C/' and Parent(file_name2) not in open_dir_map:
             if Parent(Parent(file_name2)) not in open_dir_map:
                 modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name2)), open_dir_map, open_file_map, file_length_map, modified_pos))
                 modified_pos += 1
@@ -671,33 +671,7 @@ def checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open
     if file_name not in file_length_map:
         modified_sequence.insert(modified_pos, insertWrite(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
         modified_pos += 1
-    return modified_pos
-
-def deleteScan(open_dir_map, open_file_map, new_name):
-    deleteScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
-    for f in deleteScan:
-        if f.startswith(new_name):
-            if f in open_dir_map:
-                open_dir_map.pop(f, None)
-            
-            if f in open_file_map:
-                open_file_map.pop(f, None) 
-
-def renameScan(open_dir_map, open_file_map, old_name, new_name):
-    renameScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
-    if new_name in (DirOptions + SecondDirOptions):
-        deleteScan(open_dir_map, open_file_map, new_name)
-    for f in renameScan:
-        if f.startswith(old_name):
-            if f in open_dir_map:
-                open_dir_map.pop(f, None)
-                print f.replace(old_name, new_name)
-                open_dir_map[f.replace(old_name, new_name)] = 0
-            
-            if f in open_file_map:
-                open_file_map.pop(f, None)
-                print f.replace(old_name, new_name)
-                open_file_map[f.replace(old_name, new_name)] = 0     
+    return modified_pos    
 
 # Handles satisfying dependencies, for a given core FS op
 def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
@@ -706,7 +680,6 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
     else:
         command = current_sequence[pos][0]
     
-        print 'Command = ', command
     
     if command == 'creat' or command == 'mknod':
         
@@ -736,7 +709,9 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
     elif command == 'write' or command == 'dwrite' or command == 'mmapwrite':
         file = current_sequence[pos][1][0]
         option = current_sequence[pos][1][1]
-        
+        if command == 'mmapwrite':
+            file = current_sequence[pos][1]
+            option = current_sequence[pos][2]
         modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
         
         #if file doesn't exist, has to be created and opened
@@ -749,8 +724,8 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             if file not in file_length_map:
                 file_length_map[file] = 0
             file_length_map[file] += 1
-#       elif option == 'overlap_unaligned_start' or 'overlap_unaligned_end' or 'overlap_start' or 'overlap_end' or 'overlap_extend':
-        elif option == 'overlap' or 'overlap_aligned' or 'overlap_unaligned':
+#        elif option == 'overlap_unaligned_start' or 'overlap_unaligned_end' or 'overlap_start' or 'overlap_end' or 'overlap_extend':
+        elif option == 'overlap' or option == 'overlap_aligned' or option == 'overlap_unaligned':
             modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
 
         #If we do a dwrite, let's close the file after that
@@ -804,7 +779,6 @@ def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_
             open_file_map[second_file] = 0
         elif first_file in DirOptions or first_file in SecondDirOptions:
             open_dir_map.pop(first_file, None)
-            renameScan(open_dir_map, open_file_map, first_file, second_file)
             open_dir_map[second_file] = 0
 
         
@@ -1059,21 +1033,27 @@ def buildJlang(op_list, length_map):
     return command_str
 
 def generateModifiedSequence(seq):
+    global FileOptions
+    global SecondFileOptions
+    global SecondDirOptions
+    FileOptions = FileOptions + ['A/C/foo']
+    SecondFileOptions = SecondFileOptions + ['A/C/bar']
+    SecondDirOptions = SecondDirOptions + ['A/C/'] 
     # **PHASE 4** : Deterministic stage - satisfy dependencies for all ops in the list so far.
     modified_pos = 0
     modified_sequence = list(seq)
     open_file_map = {}
     file_length_map = {}
     open_dir_map = {}
-
-    #test dir exists
+    print Parent(Parent('A/C/foo'))
+    #test dir exi  sts
     open_dir_map['test'] = 0
 
     # Go over the current sequence of operations and satisfy dependencies for each file-system op
     for i in xrange(0, len(seq)):
-      modified_pos = satisfyDep(seq, i, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-      modified_pos += 1
-        
+        modified_pos = satisfyDep(seq, i, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
+        modified_pos += 1
+
     #now close all open files
     for file_name in open_file_map:
       if open_file_map[file_name] == 1:
@@ -1112,10 +1092,6 @@ def create_trim_workloads(seq, jlang):
     global OperationSet
     global FallocOptions
     global dest_dir
-
-    FileOptions = FileOptions + ['AC/foo']
-    SecondFileOptions = SecondFileOptions + ['AC/bar']
-    SecondDirOptions = SecondDirOptions + ['AC'] 
     if jlang:
         dest_dir = "trim"
         target_path = './code/tests/' + dest_dir + '/j-lang-files/'

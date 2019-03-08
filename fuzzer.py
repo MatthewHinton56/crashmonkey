@@ -100,7 +100,7 @@ def generateWorkloads(length, debug):
         if(count == 5):
             subprocess.call('make fuzzer -j4 -s', shell=True)
             while not local_workloads.empty():
-                workloads.put(local_workloads.get(), block=True)
+                workloads.put(local_workloads.get(), block=True, timeout=20)
             count = 0
             if(initial_five):
                 initial.release()
@@ -141,7 +141,7 @@ def main():
     initial.acquire()
     start_time =time.time()
     while (time.time() - start_time) < runtime:
-            filename , seq_num = workloads.get(block=True)
+            filename , seq_num = workloads.get(block=True,timeout=20)
             #Assign a snapshot file name for replay using CrashMonkey.
             #If we have a large number of tests in the test suite, then this might blow 
             #up space. (Feature not implemented yet).
@@ -232,7 +232,7 @@ def main():
                 if 'Failed test' in results:
                     cp_command = 'cp ./diff_results/' + file + ' ' + error_path + file + '/' + file + '_error'
                     subprocess.call(cp_command, shell=True)  
-                val = 'Could not run test' not in results:
+                val = 'Could not run test' not in results
                 random_engine.completed_workload(seq_num, val)
         
     if(resume):

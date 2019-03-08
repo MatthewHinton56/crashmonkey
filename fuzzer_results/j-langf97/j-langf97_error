@@ -1,4 +1,0 @@
-DIFF : Data Mismatch of /foo
-/mnt/snapshot/foo has md5sum a5dd4dba1ec630fc3c09200ca2b0e992
-/mnt/cow_ram_snapshot5_0/foo has md5sum 588ec958a05bb9b413b2bf4e3169ed6e
-

@@ -17,6 +17,8 @@ import random
 from shutil import copyfile
 from string import maketrans
 from multiprocessing import Pool
+import filesys
+import trim_workload
 
 #All functions that has options go here
 
@@ -32,9 +34,9 @@ SecondFileOptions = ['bar', 'A/bar'] #bar
 
 #A,B are  subdirectories under test
 # test directory(root) is under a separate list because we don't want to try to create/remove it in the workload. But we should be able to fsync it.
-DirOptions = ['A']
+DirOptions = ['A/']
 TestDirOptions = ['test']
-SecondDirOptions = ['B']
+SecondDirOptions = ['B/']
 
 
 #this will take care of offset + length combo
@@ -168,55 +170,6 @@ expected_sync_sequence.append([('none'), ('fsync', 'bar')])
 
 
 
-#return sibling of a file/directory
-def SiblingOf(file):
-    if file == 'foo':
-        return 'bar'
-    elif file == 'bar' :
-        return 'foo'
-    elif file == 'A/foo':
-        return 'A/bar'
-    elif file == 'A/bar':
-        return 'A/foo'
-    elif file == 'B/foo':
-        return 'B/bar'
-    elif file == 'B/bar' :
-        return 'B/foo'
-    elif file == 'AC/foo':
-        return 'AC/bar'
-    elif file == 'AC/bar' :
-        return 'AC/foo'
-    elif file == 'A' :
-        return 'B'
-    elif file == 'B':
-        return 'A'
-    elif file == 'AC' :
-	return 'AC'
-    elif file == 'test':
-        return 'test'
-
-#Return parent of a file/directory
-def Parent(file):
-    if file == 'foo' or file == 'bar':
-        return 'test'
-    if file == 'A/foo' or file == 'A/bar' or file == 'AC':
-        return 'A'
-    if file == 'B/foo' or file == 'B/bar':
-        return 'B'
-    if file == 'A' or file == 'B' or file == 'test':
-        return 'test'
-    if file == 'AC/foo' or file == 'AC/bar':
-        return 'AC'
-
-
-# Given a list of files, return a list of related files.
-# These are optimizations to reduce the effective workload set, by persisting only related files during workload generation.
-def file_range(file_list):
-    file_set = list(file_list)
-    for i in xrange(0, len(file_list)):
-        file_set.append(SiblingOf(file_list[i]))
-        file_set.append(Parent(file_list[i]))
-    return list(set(file_set))
 
 def build_parser():
     parser = argparse.ArgumentParser(description='Automatic Crash Explorer - r v0.1')
@@ -343,469 +296,7 @@ def isBugWorkload(opList, paramList, syncList):
             return True
 
 
-# A bunch of functions to insert ops into the j-lang file.
-def insertUnlink(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    open_file_map.pop(file_name, None)
-    return ('unlink', file_name)
 
-def insertRmdir(file_name,open_dir_map, open_file_map, file_length_map, modified_pos):
-    open_dir_map.pop(file_name, None)
-    return ('rmdir', file_name)
-
-def insertXattr(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    return ('fsetxattr', file_name)
-
-def insertOpen(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    if file_name in FileOptions or file_name in SecondFileOptions:
-        open_file_map[file_name] = 1
-    elif file_name in DirOptions or file_name in SecondDirOptions or file_name in TestDirOptions:
-        open_dir_map[file_name] = 1
-    return ('open', file_name)
-
-def insertMkdir(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    if file_name in DirOptions or file_name in SecondDirOptions or file_name in TestDirOptions:
-        open_dir_map[file_name] = 0
-    return ('mkdir', file_name)
-
-def insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    if file_name in FileOptions or file_name in SecondFileOptions:
-        open_file_map[file_name] = 0
-    elif file_name in DirOptions or file_name in SecondDirOptions or file_name in TestDirOptions:
-        open_dir_map[file_name] = 0
-    return ('close', file_name)
-
-def insertWrite(file_name, open_dir_map, open_file_map, file_length_map, modified_pos):
-    if file_name not in file_length_map:
-        file_length_map[file_name] = 0
-    file_length_map[file_name] += 1
-    return ('write', (file_name, 'append'))
-
-
-#Dependency checks : Creat - file should not exist. If it does, remove it.
-def checkCreatDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    file_name = current_sequence[pos][1]
-    
-    
-    #Either open or closed doesn't matter. File should not exist at all
-    if file_name in open_file_map:
-        #Insert dependency before the creat command
-        modified_sequence.insert(modified_pos, insertUnlink(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-    return modified_pos
-
-#Dependency checks : Mkdir
-def checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    file_name = current_sequence[pos][1]
-    if file_name not in DirOptions and file_name not in SecondDirOptions:
-        print 'Invalid param list for mkdir'
-    
-    #Either open or closed doesn't matter. Directory should not exist at all
-    # TODO : We heavily depend on the pre-defined file list. Need to generalize it at some point.
-    if file_name in open_dir_map and file_name != 'test':
-        #if dir is A, remove contents within it too
-        if file_name == 'A':
-            if 'A/foo' in open_file_map and open_file_map['A/foo'] == 1:
-                file = 'A/foo'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'A/foo' in open_file_map and open_file_map['A/foo'] == 0:
-                file = 'A/foo'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            if 'A/bar' in open_file_map and open_file_map['A/bar'] == 1:
-                file = 'A/bar'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'A/bar' in open_file_map and open_file_map['A/bar'] == 0:
-                file = 'A/bar'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            
-            if 'AC' in open_dir_map and open_dir_map['AC'] == 1:
-                file = 'AC'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            if 'AC' in open_dir_map:
-                if 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 1:
-                    file = 'AC/foo'
-                    modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-                    modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-                elif 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 0:
-                    file = 'AC/foo'
-                    modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-                if 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 1:
-                    file = 'AC/bar'
-                    modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-                    modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-                elif 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 0:
-                    file = 'AC/bar'
-                    modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                    modified_pos += 1
-
-                file = 'AC'
-                modified_sequence.insert(modified_pos, insertRmdir(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-
-
-        if file_name == 'B':
-            if 'B/foo' in open_file_map and open_file_map['B/foo'] == 1:
-                file = 'B/foo'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'B/foo' in open_file_map and open_file_map['B/foo'] == 0:
-                file = 'B/foo'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            if 'B/bar' in open_file_map and open_file_map['B/bar'] == 1:
-                file = 'B/bar'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'B/bar' in open_file_map and open_file_map['B/bar'] == 0:
-                file = 'B/bar'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-
-        if file_name == 'AC':
-            if 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 1:
-                file = 'AC/foo'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'AC/foo' in open_file_map and open_file_map['AC/foo'] == 0:
-                file = 'AC/foo'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            if 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 1:
-                file = 'AC/bar'
-                modified_sequence.insert(modified_pos, insertClose(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            elif 'AC/bar' in open_file_map and open_file_map['AC/bar'] == 0:
-                file = 'AC/bar'
-                modified_sequence.insert(modified_pos, insertUnlink(file, open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-
-
-        #Insert dependency before the creat command
-        modified_sequence.insert(modified_pos, insertRmdir(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-            
-    return modified_pos
-
-# Check if parent directories exist, if not create them.
-def checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    file_names = current_sequence[pos][1]
-    if isinstance(file_names, basestring):
-        file_name = file_names
-        #Parent dir doesn't exist
-        if (Parent(file_name) == 'A' or Parent(file_name) == 'B')  and Parent(file_name) not in open_dir_map:
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        if Parent(file_name) == 'AC' and Parent(file_name) not in open_dir_map:
-            if Parent(Parent(file_name)) not in open_dir_map:
-                modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name)), open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-                    
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-
-
-
-    else:
-        file_name = file_names[0]
-        file_name2 = file_names[1]
-        
-        #Parent dir doesn't exist
-        if (Parent(file_name) == 'A' or Parent(file_name) == 'B')  and Parent(file_name) not in open_dir_map:
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        
-        if Parent(file_name) == 'AC' and Parent(file_name) not in open_dir_map:
-            if Parent(Parent(file_name)) not in open_dir_map:
-                modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name)), open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-
-        #Parent dir doesn't exist
-        if (Parent(file_name2) == 'A' or Parent(file_name2) == 'B')  and Parent(file_name2) not in open_dir_map:
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name2), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-
-        if Parent(file_name2) == 'AC' and Parent(file_name2) not in open_dir_map:
-            if Parent(Parent(file_name2)) not in open_dir_map:
-                modified_sequence.insert(modified_pos, insertMkdir(Parent(Parent(file_name2)), open_dir_map, open_file_map, file_length_map, modified_pos))
-                modified_pos += 1
-            
-            modified_sequence.insert(modified_pos, insertMkdir(Parent(file_name2), open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-    
-    return modified_pos
-
-
-# Check the dependency that file already exists and is open, eg. before writing to a file
-def checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    file_names = current_sequence[pos][1]
-    if isinstance(file_names, basestring):
-        file_name = file_names
-    else:
-        file_name = file_names[0]
-    
-    # If we are trying to fsync a dir, ensure it exists
-    if file_name in DirOptions or file_name in SecondDirOptions or file_name in TestDirOptions:
-        if file_name not in open_dir_map:
-            modified_sequence.insert(modified_pos, insertMkdir(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        
-        if file_name in open_dir_map and open_dir_map[file_name] == 0:
-            modified_sequence.insert(modified_pos, insertOpen(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-
-
-    if file_name in FileOptions or file_name in SecondFileOptions:
-        if file_name not in open_file_map or open_file_map[file_name] == 0:
-        #Insert dependency - open before the command
-            modified_sequence.insert(modified_pos, insertOpen(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-    
-    return modified_pos
-
-#Ensures that the file is closed. If not, closes it.
-def checkClosed(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    
-    file_names = current_sequence[pos][1]
-    if isinstance(file_names, basestring):
-        file_name = file_names
-    else:
-        file_name = file_names[0]
-
-    if file_name in open_file_map and open_file_map[file_name] == 1:
-        modified_sequence.insert(modified_pos, insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-    
-    if file_name in open_dir_map and open_dir_map[file_name] == 1:
-        modified_sequence.insert(modified_pos, insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-    return modified_pos
-
-
-def renameScan(open_dir_map, open_file_map, old_name, new_name):
-    renameScan = DirOptions + SecondDirOptions + FileOptions + SecondFileOptions
-    for f in renameScan:
-        if f.startswith(old_name):
-            if f in open_dir_map:
-                open_dir_map.pop(f, None)
-                open_dir_map[f.replace(old_name, new_name)] = 0
-            
-            if f in open_file_map:
-                open_file_map.pop(f, None)
-                open_file_map[f.replace(old_name, new_name)] = 0               
-
-
-
-
-#If the op is remove xattr, we need to ensure, there's atleast one associated xattr to the file
-def checkXattr(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    file_name = current_sequence[pos][1]
-    if open_file_map[file_name] == 1:
-        modified_sequence.insert(modified_pos, insertXattr(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-    return modified_pos
-
-# For overwrites ensure that the file is not empty.
-def checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    
-    file_names = current_sequence[pos][1]
-    if isinstance(file_names, basestring):
-        file_name = file_names
-    else:
-        file_name = file_names[0]
-    
-    # 0 length file
-    if file_name not in file_length_map:
-        modified_sequence.insert(modified_pos, insertWrite(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
-    return modified_pos
-
-
-# Handles satisfying dependencies, for a given core FS op
-def satisfyDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map):
-    if isinstance(current_sequence[pos], basestring):
-        command = current_sequence[pos]
-    else:
-        command = current_sequence[pos][0]
-    
-    #    print 'Command = ', command
-    
-    if command == 'creat' or command == 'mknod':
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkCreatDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        file = current_sequence[pos][1]
-        open_file_map[file] = 1
-    
-    elif command == 'mkdir':
-        modified_pos = checkDirDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        dir = current_sequence[pos][1]
-        open_dir_map[dir] = 0
-
-    elif command == 'falloc':
-        file = current_sequence[pos][1][0]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        #if file doesn't exist, has to be created and opened
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        #Whatever the op is, let's ensure file size is non zero
-        modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-
-
-    elif command == 'write' or command == 'dwrite' or command == 'mmapwrite':
-        file = current_sequence[pos][1][0]
-        option = current_sequence[pos][1][1]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        #if file doesn't exist, has to be created and opened
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        
-        #if we chose to do an append, let's not care about the file size
-        # however if its an overwrite or unaligned write, then ensure file is atleast one page long
-        if option == 'append':
-            if file not in file_length_map:
-                file_length_map[file] = 0
-            file_length_map[file] += 1
-#       elif option == 'overlap_unaligned_start' or 'overlap_unaligned_end' or 'overlap_start' or 'overlap_end' or 'overlap_extend':
-        elif option == 'overlap' or 'overlap_aligned' or 'overlap_unaligned':
-            modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-
-        #If we do a dwrite, let's close the file after that
-        if command == 'dwrite':
-            if file in FileOptions or file in SecondFileOptions:
-                open_file_map[file] = 0
-
-
-    elif command == 'link':
-        second_file = current_sequence[pos][1][1]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        if second_file in open_file_map and open_file_map[second_file] == 1:
-        #Insert dependency - open before the command
-            modified_sequence.insert(modified_pos, insertClose(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-    
-        #if we have a closed file, remove it
-        if second_file in open_file_map and open_file_map[second_file] == 0:
-            #Insert dependency - open before the command
-            modified_sequence.insert(modified_pos, insertUnlink(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        
-        
-        #We have created a new file, but it isn't open yet
-        open_file_map[second_file] = 0
-    
-    elif command == 'rename':
-        #If the file was open during rename, does the handle now point to new file?
-        first_file = current_sequence[pos][1][0]
-        second_file = current_sequence[pos][1][1]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        #Checks if first file is closed
-        modified_pos = checkClosed(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        if second_file in open_file_map and open_file_map[second_file] == 1:
-            #Insert dependency - close the second file
-            modified_sequence.insert(modified_pos, insertClose(second_file, open_dir_map, open_file_map, file_length_map, modified_pos))
-            modified_pos += 1
-        
-        #We have removed the first file, and created a second file
-        if first_file in FileOptions or first_file in SecondFileOptions:
-            open_file_map.pop(first_file, None)
-            open_file_map[second_file] = 0
-        elif first_file in DirOptions or first_file in SecondDirOptions:
-            open_dir_map.pop(first_file, None)
-            renameScan(open_dir_map, open_file_map, first_file, second_file)
-            open_dir_map[second_file] = 0
-        
-
-    elif command == 'symlink':
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        #No dependency checks
-        pass
-    
-    elif command == 'remove' or command == 'unlink':
-        #Close any open file handle and then unlink
-        file = current_sequence[pos][1]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos,open_dir_map, open_file_map, file_length_map)
-        modified_pos = checkClosed(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        #Remove file from map
-        open_file_map.pop(file, None)
-
-
-    elif command == 'removexattr':
-        #Check that file exists
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        #setxattr
-        modified_pos = checkXattr(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-    
-    elif command == 'fsync' or command == 'fdatasync' or command == 'fsetxattr':
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-
-    elif command == 'none' or command == 'sync':
-        pass
-
-    elif command == 'truncate':
-        file = current_sequence[pos][1][0]
-        option = current_sequence[pos][1][1]
-        
-        modified_pos = checkParentExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        # if file doesn't exist, has to be created and opened
-        modified_pos = checkExistsDep(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-        
-        # Put some data into the file
-        modified_pos = checkFileLength(current_sequence, pos, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-    
-    else:
-        print command
-        print 'Invalid command'
-
-    return modified_pos
 
 #Helper to merge lists
 def flatList(op_list):
@@ -845,20 +336,20 @@ def buildJlang(op_list, length_map):
         else:
             command_str = command_str + 'open ' + file.replace('/','') + ' O_RDWR|O_CREAT 0777'
 
-    if command == 'creat':
+    elif command == 'creat':
         file = flat_list[1]
         command_str = command_str + 'open ' + file.replace('/','') + ' O_RDWR|O_CREAT 0777'
 
-    if command == 'mkdir':
+    elif command == 'mkdir':
         file = flat_list[1]
         command_str = command_str + 'mkdir ' + file.replace('/','') + ' 0777'
 
-    if command == 'mknod':
+    elif command == 'mknod':
         file = flat_list[1]
         command_str = command_str + 'mknod ' + file.replace('/','') + ' TEST_FILE_PERMS|S_IFCHR|S_IFBLK' + ' 0'
 
 
-    if command == 'falloc':
+    elif command == 'falloc':
         file = flat_list[1]
         option = flat_list[2]
         write_op = flat_list[3]
@@ -882,7 +373,7 @@ def buildJlang(op_list, length_map):
         
         command_str = command_str + off + ' ' + lenn
 
-    if command == 'write':
+    elif command == 'write':
         file = flat_list[1]
         write_op = flat_list[2]
         command_str = command_str + 'write ' + file.replace('/','') + ' '
@@ -910,7 +401,7 @@ def buildJlang(op_list, length_map):
         
         command_str = command_str + off + ' ' + lenn
 
-    if command == 'dwrite':
+    elif command == 'dwrite':
         file = flat_list[1]
         write_op = flat_list[2]
         command_str = command_str + 'dwrite ' + file.replace('/','') + ' '
@@ -934,7 +425,7 @@ def buildJlang(op_list, length_map):
 
         command_str = command_str + off + ' ' + lenn
     
-    if command == 'mmapwrite':
+    elif command == 'mmapwrite':
         file = flat_list[1]
         write_op = flat_list[2]
         ret = flat_list[3]
@@ -961,35 +452,35 @@ def buildJlang(op_list, length_map):
 
     
 
-    if command == 'link' or command =='rename' or command == 'symlink':
+    elif command == 'link' or command =='rename' or command == 'symlink':
         file1 = flat_list[1]
         file2 = flat_list[2]
         command_str = command_str + command + ' ' + file1.replace('/','') + ' ' + file2.replace('/','')
 
-    if command == 'unlink'or command == 'remove' or command == 'rmdir' or command == 'close' or command == 'fsetxattr' or command == 'removexattr':
+    elif command == 'unlink'or command == 'remove' or command == 'rmdir' or command == 'close' or command == 'fsetxattr' or command == 'removexattr':
         file = flat_list[1]
         command_str = command_str + command + ' ' + file.replace('/','')
 
-    if command == 'fsync':
+    elif command == 'fsync':
         file = flat_list[1]
         ret = flat_list[2]
         command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
 
-    if command =='fdatasync':
+    elif command =='fdatasync':
         file = flat_list[1]
         ret = flat_list[2]
         command_str = command_str + command + ' ' + file.replace('/','') + '\ncheckpoint ' + ret
 
 
-    if command == 'sync':
+    elif command == 'sync':
         ret = flat_list[1]
         command_str = command_str + command + '\ncheckpoint ' + ret
 
-    if command == 'none':
+    elif command == 'none':
         command_str = command_str + command
 
 
-    if command == 'truncate':
+    elif command == 'truncate':
         file = flat_list[1]
         trunc_op = flat_list[2]
         command_str = command_str + command + ' ' + file.replace('/','') + ' '
@@ -999,6 +490,9 @@ def buildJlang(op_list, length_map):
         elif trunc_op == 'unaligned':
             len = '2500'
         command_str = command_str + len
+    
+    else:
+        print 'error: ' + command
 
     return command_str
 
@@ -1079,34 +573,110 @@ def generateSeq(perm, currentParameterOption, sync):
     
     return seq    
     
-    
+
+def satisfyDep(op, modified_seq, root):
+
+    if isinstance(op,  basestring):
+        command = op
+    else:
+        command = op[0]
+    if command == 'creat' or command == 'mknod':
+
+        filePath = op[1]
+        filesys.preCreat(modified_seq,filePath, root)
+        modified_seq.append(op)
+        filesys.postCreat(filePath, root)
+
+    elif command == 'mkdir':
+        dirPath = op[1]
+        filesys.preMkdirKNode(modified_seq, dirPath, root)
+        modified_seq.append(op)
+        filesys.postMkdirKNode(dirPath, root)
+
+    elif command == 'falloc':
+        filePath = op[1][0]
+        filesys.preFalloc(modified_seq, filePath, root)
+        modified_seq.append(op)
+        filesys.postFalloc()
+
+    elif command == 'write' or command == 'dwrite' or command == 'mmapwrite':
+        if command == 'mmapwrite':
+            filePath = op[1]
+            option = op[2]
+        else:
+            filePath = op[1][0]
+            option = op[1][1]
+        filesys.preWrite(modified_seq, filePath, option, root)
+        modified_seq.append(op)
+        filesys.postWrite(filePath, command, root)   
+
+    elif command == 'link':
+        filePathOne = op[1][0]
+        filePathTwo = op[1][1]
+        filesys.preLink(modified_seq, filePathOne, filePathTwo, root)
+        modified_seq.append(op)
+        filesys.postLink(filePathOne, filePathTwo, root)
+
+    elif command == 'rename':
+        filePathOne = op[1][0]
+        filePathTwo = op[1][1] 
+        filesys.preRename(modified_seq, filePathOne, filePathTwo, root)
+        modified_seq.append(op)
+        filesys.postRename(filePathOne, filePathTwo, root)
+
+    elif command == 'symlink':
+        filePath = op[1][0]
+        filesys.preSymLink(modified_seq, filePath, root)
+        modified_seq.append(op)
+        filesys.postSymLink()    
+
+    elif command == 'remove' or command == 'unlink':
+        filePath = op[1]
+        filesys.preRemoveUnlink(modified_seq, filePath, root)
+        modified_seq.append(op)   
+        filesys.postRemoveUnlink(filePath, root)
+
+    elif command == 'removexattr':
+        filePath = op[1]
+        filesys.preRemovexattr(modified_seq, filePath, root)
+        modified_seq.append(op)
+        filesys.postRemovexattr(filePath, root)
+
+    elif command == 'fsync' or command == 'fdatasync' or command == 'fsetxattr':     
+        filePath = op[1]
+        filesys.preFSyncSet(modified_seq, filePath, root)
+        modified_seq.append(op)
+        filesys.postFSyncSet(command, filePath, root)
+
+    elif command == 'none' or command == 'sync':
+        modified_seq.append(op)
+
+    elif command == 'truncate':
+        filePath = op[1][0]
+        option = op[1][1]   
+        filesys.preTruncate(modified_seq, filePath, root)
+        modified_seq.append(op)
+        filesys.postTruncate(filePath, option, root)
+
+    else:
+        print command
+        print 'Invalid command'       
+
+
 def generateModifiedSequence(seq):
     # **PHASE 4** : Deterministic stage - satisfy dependencies for all ops in the list so far.
-    modified_pos = 0
-    modified_sequence = list(seq)
-    open_file_map = {}
-    file_length_map = {}
-    open_dir_map = {}
-
+    modified_sequence = list()
+    root = filesys.initialize_filesys()
+    filesys.createFile(root, 'test', False)
     #test dir exists
-    open_dir_map['test'] = 0
 
     # Go over the current sequence of operations and satisfy dependencies for each file-system op
-    for i in xrange(0, len(seq)):
-      modified_pos = satisfyDep(seq, i, modified_sequence, modified_pos, open_dir_map, open_file_map, file_length_map)
-      modified_pos += 1
-        
-    #now close all open files
-    for file_name in open_file_map:
-      if open_file_map[file_name] == 1:
-        modified_sequence.insert(modified_pos, insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
+    for op in seq:
+      modified_pos = satisfyDep(op, modified_sequence, root)
     
-    #close all open directories
-    for file_name in open_dir_map:
-      if open_dir_map[file_name] == 1:
-        modified_sequence.insert(modified_pos, insertClose(file_name, open_dir_map, open_file_map, file_length_map, modified_pos))
-        modified_pos += 1
+
+    filesys.closeFiles(modified_sequence, root)
+    filesys.closeDirectories(modified_sequence, root)
     return modified_sequence
 
 param_num_max = 0
@@ -1260,11 +830,11 @@ def setup(nested, resume_f):
     global syncOptions
     global workload_count 
     if nested:
-      FileOptions = FileOptions + ['AC/foo']
-      SecondFileOptions = SecondFileOptions + ['AC/bar']
-      SecondDirOptions = SecondDirOptions + ['AC']
+      FileOptions = FileOptions + ['A/C/foo']
+      SecondFileOptions = SecondFileOptions + ['A/C/bar']
+      SecondDirOptions = SecondDirOptions + ['A/C/']
     file_list = list(set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))    
-    syncOptions = getSyncOptions(file_range(file_list))    
+    syncOptions = getSyncOptions(file_list)    
     global_count = 0
     workload_count = 0
     dest_dir = "fuzzer"
@@ -1276,6 +846,7 @@ def setup(nested, resume_f):
         os.makedirs(target_path_seq)
     for i in OperationSet:
         parameterList[i] = buildTuple(i)
+    parameterList['rename'].remove(('A/', 'A/C/'))
     dest_j_lang_file = './code/tests/' + dest_dir + '/base-j-lang'
     source_j_lang_file = './code/tests/ace-base/base-j-lang'
     copyfile(source_j_lang_file, dest_j_lang_file)
@@ -1362,7 +933,10 @@ def produceWorkload(upper_bound, jlang_f, debug):
     seq = generateSeq(perm, param, syncList)    
     most_recent_seq = seq
     #print(seq)  
+    modified_seq_two = trim_workload.generateModifiedSequence(seq)
     modified_seq = generateModifiedSequence(seq)
+    print modified_seq
+    print modified_seq_two
       #print(bloomFilter)
     #print ("done") 
     #print ("hits:" + str(hits))
@@ -1421,19 +995,23 @@ def resume():
 
 
 def main():
-    setup(True, False)
-    start = time.time()
-    parsed_args = build_parser().parse_args()
-    setup(True, False)
-    avg = 0.0
-    for index in range(0, int(parsed_args.amount)):
-      test_start = time.time()
-      val = produceWorkload(int(parsed_args.sequence_len), False, True)
-      avg += (time.time() - test_start)
 
-    print false_negative  
-    print time.time() - start
-    print (avg / int(parsed_args.amount))
+    setup(True, False)
+    print syncOptions
+    file_list = list(set(FileOptions + SecondFileOptions + DirOptions + SecondDirOptions + TestDirOptions))   
+    print getSyncOptions(file_list)
+    print parameterList['rename']
+#    start = time.time()
+#    parsed_args = build_parser().parse_args()
+#    setup(True, False)
+#   avg = 0.0
+    for index in range(0, int(5)):
+     val = produceWorkload(int(5), False, True)
+#      avg += (time.time() - test_start)
+
+#    print false_negative 
+#   print time.time() - start
+#  print (avg / int(parsed_args.amount))
 
 if __name__ == '__main__':
 	main()

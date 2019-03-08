@@ -12,7 +12,11 @@ class File_O:
         self.length = 0
     
     def __str__(self):
-        return 'Name: ' + self.name + ' Parent: ' + self.parent.name + ' Attribute: ' + str(self.attribute) + ' open: ' + str(self.open)
+        if self.parent == None:
+            parent_s = ''
+        else:
+            parent_s = self.parent.name
+        return 'Name: ' + self.name + ' Parent: ' + parent_s + ' Attribute: ' + str(self.attribute) + ' open: ' + str(self.open) +' Type: ' + self.__class__.__name__
 
     def getParent(self):
         return self.parent
@@ -21,6 +25,8 @@ class File_O:
         self.parent = parent
     
     def getPath(self):
+        if self.parent.name == '/':
+            return self.name
         f = self.parent
         return f.getPath() +  self.name 
 
@@ -83,11 +89,14 @@ def splitPath(path):
 
 def hasFile(dir, path):
     pathList = splitPath(path)
+    name = pathList[len(pathList)-1]
+    pathToFile = pathList[:(len(pathList)-1)]
     scan_dir = dir
-    for step in pathList:
-        if not scan_dir.hasChild(step):
+    for step in pathToFile:
+        if not scan_dir.hasChild(step) or not isinstance(scan_dir.getChild(step), Directory):
             return False
-    return True
+        scan_dir = scan_dir.getChild(step)
+    return scan_dir.hasChild(name)
    
 
 #Pre files along path exist
@@ -110,6 +119,8 @@ def createFile(dir, path, is_dir):
 
 def findFile(dir, path):
     pathList = splitPath(path)
+    if len(pathList) == 0:
+        return dir
     name = pathList[len(pathList)-1]
     pathToFile = pathList[:(len(pathList)-1)]
     scan_dir = dir
@@ -126,8 +137,7 @@ def unlinkFile(dir, filePath):
 
 
 def checkExistsDep(modified_seq, filePath, root):
-    bool is_dir = filePath.endswith('/')
-    if is_dir:
+    if  filePath.endswith('/'):
         if not hasFile(root, filePath):
             dir = createFile(root, filePath, True)
             modified_seq.append(('mkdir', filePath))
@@ -135,16 +145,20 @@ def checkExistsDep(modified_seq, filePath, root):
             dir = findFile(root, filePath)    
         if not dir.open:
             dir.open = True
-            modified_seq.append(('opendir', filePath))
+            modified_seq.append(('open', filePath))
         return dir
     else:
+        need_open = False
         if not hasFile(root, filePath):
             file = createFile(root, filePath, False)
-        else
+            need_open = True
+        else:
             file = findFile(root, filePath)
         if not file.open:
             file.open = True
-        modified_seq.append(('open', filePath))
+            need_open = True
+        if need_open:
+            modified_seq.append(('open', filePath))
         return file
 
 
@@ -155,10 +169,8 @@ def writeDependency(modified_seq, filePath, root):
         modified_seq.append(('write', (filePath, 'append')))
 
 
-root = None
 def initialize_filesys():
-    global root
-    root = Directory('/', None)
+    return Directory('/', None)
 
 def parentExist(modified_seq, parentPath, root):
     path = splitPath(parentPath)
@@ -217,7 +229,7 @@ def dirDelete(modified_seq, dir):
 
 def preCreat(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq,parentPath, root)
     createDependency(modified_seq, filePath, root)
 
@@ -235,7 +247,7 @@ def postMkdirKNode(filePath, root):
 
 def preFalloc(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq,parentPath, root)
     checkExistsDep(modified_seq, filePath, root)
     writeDependency(modified_seq, filePath, root)
@@ -243,52 +255,62 @@ def preFalloc(modified_seq, filePath, root):
 def postFalloc():
     pass
 
-def preWrite(modified_seq, filePath,command, option, root):
+def preWrite(modified_seq, filePath, option, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq, parentPath, root)
     file = checkExistsDep(modified_seq, filePath, root)
     if option == 'append':
         file.length += 1
-     elif option == 'overlap' or 'overlap_aligned' or 'overlap_unaligned':
+    elif option == 'overlap' or option == 'overlap_aligned' or option == 'overlap_unaligned' or option == 'overlap_extend':
         writeDependency(modified_seq, filePath, root)
-    if command == 'dwrite':
-        file.open = False
 
-def postWrite():
-    pass
+def postWrite(filePath, command, root):
+    file = findFile(root, filePath)
+    if command == 'dwrite':
+        file.open = False    
 
 def preLink(modified_seq, filePathOne, filePathTwo, root):
     pathOne = splitPath(filePathOne)
-    parentPathOne = '/'.join(parentPathOne[:(len(path)-1)])
+    parentPathOne = '/'.join(pathOne[:(len(pathOne)-1)])
     parentExist(modified_seq, parentPathOne, root)
-    pathTwo = splitPath(filePath)
-    parentPathTwo = '/'.join(parentPath[:(len(path)-1)])
+    pathTwo = splitPath(filePathTwo)
+    parentPathTwo = '/'.join(pathTwo[:(len(pathTwo)-1)])
     parentExist(modified_seq, parentPathTwo, root)
     checkExistsDep(modified_seq, filePathOne, root)
     closeAndUnlink(modified_seq, filePathTwo, root, True)
 
 def postLink(filePathOne, filePathTwo, root):
-    createFile(root, filePathTwo, False)
+    createFile(root, filePathTwo, filePathTwo.endswith('/'))
 
 def preRename(modified_seq, filePathOne, filePathTwo, root):
     pathOne = splitPath(filePathOne)
-    parentPathOne = '/'.join(parentPathOne[:(len(path)-1)])
+    parentPathOne = '/'.join(pathOne[:(len(pathOne)-1)])
     parentExist(modified_seq, parentPathOne, root)
-    pathTwo = splitPath(filePath)
-    parentPathTwo = '/'.join(parentPath[:(len(path)-1)])
+    pathTwo = splitPath(filePathTwo)
+    parentPathTwo = '/'.join(pathTwo[:(len(pathTwo)-1)])
     parentExist(modified_seq, parentPathTwo, root)
     checkExistsDep(modified_seq, filePathOne, root)
+    closeAndUnlink(modified_seq, filePathOne, root, False)
     closeAndUnlink(modified_seq, filePathTwo, root, False)
+    if hasFile(root, filePathTwo) and isinstance(findFile(root, filePathTwo), Directory):
+        dirDelete(modified_seq, findFile(root, filePathTwo))
 
 def postRename(filePathOne, filePathTwo, root):
     file = findFile(root, filePathOne)
     file.parent.removeChild(file)
-    createFile(root, filePathTwo, False)
+    pathTwo = splitPath(filePathTwo)
+    parentPathTwo = '/'.join(pathTwo[:(len(pathTwo)-1)])    
+    parentExist([], parentPathTwo, root)
+    new_file = createFile(root, filePathTwo, filePathTwo.endswith('/'))
+    if isinstance(file, Directory):
+        for old in file.children:
+            file.getChild(old).open = False
+            new_file.addChild(file.getChild(old))
 
 def preSymLink(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq,parentPath, root)
 
 def postSymLink():
@@ -296,7 +318,7 @@ def postSymLink():
 
 def preRemoveUnlink(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq, parentPath, root)
     checkExistsDep(modified_seq, filePath, root)
     closeAndUnlink(modified_seq, filePath, root, False)    
@@ -307,7 +329,7 @@ def postRemoveUnlink(filePath, root):
 
 def preRemovexattr(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq, parentPath, root)
     file = checkExistsDep(modified_seq, filePath, root)
     if not file.attribute:
@@ -320,7 +342,7 @@ def postRemovexattr(filePath, root):
 
 def preFSyncSet(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq, parentPath, root)
     file = checkExistsDep(modified_seq, filePath, root)
 
@@ -331,50 +353,54 @@ def postFSyncSet(command, filePath, root):
 
 def preTruncate(modified_seq, filePath, root):
     path = splitPath(filePath)
-    parentPath = '/'.join(parentPath[:(len(path)-1)])
+    parentPath = '/'.join(path[:(len(path)-1)])
     parentExist(modified_seq,parentPath, root)
     checkExistsDep(modified_seq, filePath, root)
     writeDependency(modified_seq, filePath, root)
 
-def postTruncate(filePath, root, option):
-    if command == 'aligned':
+def postTruncate(filePath, option, root):
+    if option == 'aligned':
         file = findFile(root, filePath)
         file.length = 0
 
+def closeFiles(modified_sequence, root):
+    q = Queue()
+    for child in root.children:
+        q.put(root.children[child])
+    while not q.empty():
+        f = q.get()
+        if  isinstance(f, Directory):
+            for child in f.children:
+                q.put(f.children[child])
+        else:
+            if f.open:
+                f.open = False
+                modified_sequence.append(('close', f.getPath()))
 
+def closeDirectories(modified_sequence, root):
+    q = Queue()
+    for child in root.children:
+        q.put(root.children[child])
+    while not q.empty():
+        f = q.get()
+        if  isinstance(f, Directory):
+            if f.open:
+                f.open = False
+                modified_sequence.append(('close', f.getPath()))
+            for child in f.children:
+                q.put(f.children[child])
 
 def main():
     foo = File_O('foo', None)
     root = Directory('/', None)
-    A = Directory('A', None)
-    B = Directory('B', None)
-    B.open = True
-    root.addChild(A)
-    A.addChild(foo)
-    A.addChild(B)
-    print foo.getPath()
-    print A == 'A'
-    print 'A/B/C/'
-    print hasFile(A, 'B')
-    createFile(root, 'A/B/foo', False)
-    print B.children['foo']
-    test = 'fsd'
-    print test[len(test)+1:len(test)]
-    testList = []
-    parentExist(testList, 'D/C/', root)
-    print root.children['D']
-    print root.children['D'].children['C'].getPath()
-    print testList
-    test = 'A/B/C/foo'
-    l = test.split('/')
-    print l
-    print findFile(root, 'A')
+    modified_seq = []
+    preCreat(modified_seq, 'A/C/foo', root)
+    postCreat('A/C/foo', root)
+    preRename(modified_seq, 'A/C/', 'B/', root)
+    postRename('A/C/', 'B/', root)
     printFileSys(root)
-    testList = []
-    dirDelete(testList, A)
-    print testList
-    print 'A/'.split('/')
-    printFileSys(root)   
+    print modified_seq
+
 
 if __name__ == '__main__':
 	main()
