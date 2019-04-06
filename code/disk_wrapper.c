@@ -57,11 +57,12 @@ static struct hwm_device {
   (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
    LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
   struct block_device* target_dev;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
-   LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
+   LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+   LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
   struct gendisk* target_dev;
   u8 target_partno;
-  struct block_device* target_bd;
+  struct block_device* target_bd; 
 #else
 #error "Unsupported kernel version: CrashMonkey has not been tested with " \
   "your kernel version."
@@ -130,12 +131,19 @@ static int disk_wrapper_ioctl(struct block_device* bdev, fmode_t mode,
         printk(KERN_WARNING "hwm: no log entry here \n");
         return -ENODATA;
       }
-      if (!access_ok(VERIFY_WRITE, (void*) arg,
+      //New version of access_ok does nnot check type
+      #if LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
+        if (!access_ok((void*) arg,
             sizeof(struct disk_write_op_meta))) {
+      #else
+        if (!access_ok(VERIFY_WRITE, (void*) arg,
+            sizeof(struct disk_write_op_meta))) {
+      #endif 
         // TODO(ashmrtn): Find right error code.
         printk(KERN_WARNING "hwm: bad user land memory pointer in log entry"
             " size\n");
         return -EFAULT;
+
       }
       // Copy metadata.
       not_copied = sizeof(struct disk_write_op_meta);
@@ -151,10 +159,17 @@ static int disk_wrapper_ioctl(struct block_device* bdev, fmode_t mode,
         printk(KERN_WARNING "hwm: no log entries to report data for\n");
         return -ENODATA;
       }
-      if (!access_ok(VERIFY_WRITE, (void*) arg,
+
+      #if LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
+        if (!access_ok((void*) arg,
             Device.current_log_write->metadata.size)) {
+      #else
+        if (!access_ok(VERIFY_WRITE, (void*) arg,
+            Device.current_log_write->metadata.size)) {
+      #endif
         // TODO(ashmrtn): Find right error code.
         return -EFAULT;
+      
       }
 
       // Copy written data.
@@ -352,8 +367,9 @@ static unsigned long long convert_flags(unsigned long long flags) {
   if (flags & REQ_NO_TIMEOUT) {
     res |= HWM_NO_TIMEOUT_FLAG;
   }
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) \
-    && LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) \
+    && LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+       LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
 
   if ((flags & REQ_OP_MASK) == REQ_OP_WRITE) {
     res |= HWM_WRITE_FLAG;
@@ -421,8 +437,9 @@ static bool should_log(struct bio *bio) {
     (bio->BI_RW & REQ_FLUSH || bio->BI_RW & REQ_FUA ||
      bio->BI_RW & REQ_FLUSH_SEQ || bio->BI_RW & REQ_WRITE ||
      bio->BI_RW & REQ_DISCARD);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) \
-    && LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) \
+    && LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+       LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
   // Other REQ_OP_xx functions are odd numbers, meaning they set the
   // REQ_OP_WRITE bit which we already check for (ex. REQ_OP_WRITE_SAME = 7).
   return
@@ -469,8 +486,9 @@ static void print_rw_flags(unsigned long rw, unsigned long flags) {
     (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
      LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
 static void disk_wrapper_bio(struct request_queue* q, struct bio* bio) {
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
-    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
+    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+   LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
 static blk_qc_t disk_wrapper_bio(struct request_queue* q, struct bio* bio) {
 #else
 #error "Unsupported kernel version: CrashMonkey has not been tested with " \
@@ -582,8 +600,9 @@ static blk_qc_t disk_wrapper_bio(struct request_queue* q, struct bio* bio) {
    LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
   bio->bi_bdev = hwm->target_dev;
   submit_bio(bio->BI_RW, bio);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
-    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
+    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+    LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
   bio->bi_disk = hwm->target_dev;
   bio->bi_partno = hwm->target_partno;
   submit_bio(bio);
@@ -663,8 +682,9 @@ static int __init disk_wrapper_init(void) {
   (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
    LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
   Device.target_dev = target_device;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
-    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
+    LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+   LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
   Device.target_dev = target_device->bd_disk;
   Device.target_partno = target_device->bd_partno;
   Device.target_bd = target_device;
@@ -768,8 +788,9 @@ static void __exit hello_cleanup(void) {
   (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && \
    LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
   blkdev_put(Device.target_dev, FMODE_READ);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
-  LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) && \
+  LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)) || \
+  LINUX_VERSION_CODE == KERNEL_VERSION(5, 0 ,7)
   blkdev_put(Device.target_bd, FMODE_READ);
 #else
 #error "Unsupported kernel version: CrashMonkey has not been tested with " \
