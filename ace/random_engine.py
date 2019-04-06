@@ -932,16 +932,8 @@ def produceWorkload(upper_bound, jlang_f, debug):
       sequence_num = getSequenceNum(perm, param, syncList)
     seq = generateSeq(perm, param, syncList)    
     most_recent_seq = seq
-    #print(seq)  
-    modified_seq_two = trim_workload.generateModifiedSequence(seq)
+    #modified_seq_two = trim_workload.generateModifiedSequence(seq)
     modified_seq = generateModifiedSequence(seq)
-    print modified_seq
-    print modified_seq_two
-      #print(bloomFilter)
-    #print ("done") 
-    #print ("hits:" + str(hits))
-    #print(bloomFilter_size - filledSpaces)  
-    #print (modified_seq)
     jlang = ' '
     if(debug):
         time_e = time.time()

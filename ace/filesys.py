@@ -226,6 +226,22 @@ def dirDelete(modified_seq, dir):
     dirDeleteHelper(modified_seq, dir)
     dir.parent.removeChild(dir)
 
+def dirCloseHelper(modified_seq, dir):
+    for child_name in dir.children:
+        child = dir.getChild(child_name)
+        if isinstance(child, Directory): 
+            dirCloseHelper(modified_seq, child)
+        if child.open:
+            child.open = False
+            modified_seq.append(('close', child.getPath()))
+
+def dirClose(modified_seq, dir):
+    if isinstance(dir, Directory):
+        dirCloseHelper(modified_seq, dir)
+    if dir.open:
+        dir.open = False
+        modified_seq.append(('close', dir.getPath()))
+
 
 def preCreat(modified_seq, filePath, root):
     path = splitPath(filePath)
@@ -291,6 +307,7 @@ def preRename(modified_seq, filePathOne, filePathTwo, root):
     parentPathTwo = '/'.join(pathTwo[:(len(pathTwo)-1)])
     parentExist(modified_seq, parentPathTwo, root)
     checkExistsDep(modified_seq, filePathOne, root)
+    dirClose(modified_seq, findFile(root, filePathOne))
     closeAndUnlink(modified_seq, filePathOne, root, False)
     closeAndUnlink(modified_seq, filePathTwo, root, False)
     if hasFile(root, filePathTwo) and isinstance(findFile(root, filePathTwo), Directory):

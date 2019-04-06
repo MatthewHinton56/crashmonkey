@@ -95,6 +95,7 @@ def generateWorkloads(length, debug):
     local_workloads = Queue()
     while running:
         filename , seq_num = random_engine.produceWorkload(length, True, debug)
+        #filename, seq_num = ('temp', 1)
         local_workloads.put( (filename + '.so' , seq_num ) )
         count += 1
         if(count == 5):
