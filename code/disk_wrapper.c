@@ -733,7 +733,8 @@ static int __init disk_wrapper_init(void) {
   set_capacity(Device.gd, get_capacity(target_device->bd_disk));
   strcpy(Device.gd->disk_name, "hwm");
   Device.gd->fops = &disk_wrapper_ops;
-
+  if(test_bit(QUEUE_FLAG_REGISTERED, &queue_flags))
+    printk(KERN_NOTICE "hwm: already registered -1\n");
   // Get a request queue.
   Device.gd->queue = blk_alloc_queue(GFP_KERNEL);
   if (Device.gd->queue == NULL) {
@@ -766,7 +767,8 @@ static int __init disk_wrapper_init(void) {
   printk(KERN_INFO "hwm: working with queue with:\n\tflush flags 0x%lx\n",
       Device.gd->queue->flush_flags);
 #endif
-
+  if(test_bit(QUEUE_FLAG_REGISTERED, &Device.gd->queue->queue_flags))
+    printk(KERN_NOTICE "hwm: already registered -4\n");
   add_disk(Device.gd);
 
   printk(KERN_NOTICE "hwm: initialized\n");
