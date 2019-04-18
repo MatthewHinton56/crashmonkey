@@ -338,7 +338,7 @@ int Tester::remove_wrapper() {
         usleep(500);
         num_tries ++;
       }
-    } while (res != 0 && elapsed.count() < 1000);
+    } while (res != 0 && elapsed.count() < 5000);
 
      if (res != 0) {
         wrapper_inserted = true;

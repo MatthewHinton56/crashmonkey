@@ -583,7 +583,7 @@ static struct brd_device *brd_alloc(int i)
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(5, 0, 7)
   blk_queue_flag_set(QUEUE_FLAG_DISCARD, brd->brd_queue);
 #else
-  queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, brd->brd_queue);
+  queue_flag_set(QUEUE_FLAG_DISCARD, brd->brd_queue);
 #endif
 
   disk = brd->brd_disk = alloc_disk(1 << part_shift);
